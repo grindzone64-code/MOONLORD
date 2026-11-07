@@ -226,7 +226,7 @@ class NativePlayer {
             state.voiceConnection = null;
         }
 
-        console.log(`[NativePlayer] [${botLic}] Bot #${bot.index} joining voice channel: ${channel.name} (${channel.id}) via DAVE protocol`);
+        console.log(`[NativePlayer] [${botLic}] Bot #${bot.index} joining voice channel: ${channel.name} (${channel.id})`);
 
         const botGroup = `bot-${bot.client?.user?.id || stateId}`;
         const connection = joinVoiceChannel({
@@ -234,8 +234,9 @@ class NativePlayer {
             guildId: guild.id,
             adapterCreator: guild.voiceAdapterCreator,
             selfDeaf: Boolean(options.selfDeaf ?? options.deaf),
-            selfMute: Boolean(options.selfMute ?? options.mute),
-            group: botGroup
+            selfMute: false,
+            group: botGroup,
+            daveEncryption: false
         });
 
         state.voiceConnection = connection;
@@ -457,8 +458,7 @@ class NativePlayer {
 
         const ytdlProc = spawn(ytdlExe, [
             '--no-warnings',
-            '--js-runtimes', 'node',
-            '--extractor-args', 'youtube:player_client=android,ios,web',
+            '--extractor-args', 'youtube:player_client=android,web',
             '-f', 'ba/b',
             '-o', '-',
             '--no-playlist',
@@ -495,6 +495,7 @@ class NativePlayer {
         const ffmpegProc = spawn(ffmpegExe, ffArgs, { windowsHide: true });
         state.ffmpegProc = ffmpegProc;
 
+        ffmpegProc.stderr.on('data', () => {});
         ytdlProc.stdout.pipe(ffmpegProc.stdin);
 
         ytdlProc.stdout.on('error', () => {});
@@ -587,7 +588,7 @@ class NativePlayer {
             const player = createAudioPlayer({
                 behaviors: {
                     noSubscriber: NoSubscriberBehavior.Play,
-                    maxMissedFrames: 250
+                    maxMissedFrames: 1000
                 }
             });
 
@@ -625,7 +626,7 @@ class NativePlayer {
         state.currentResource = resource;
         state.audioPlayer.play(resource);
 
-        if (state.voiceConnection) {
+        if (state.voiceConnection && state.voiceConnection.state.subscription?.player !== state.audioPlayer) {
             state.voiceConnection.subscribe(state.audioPlayer);
         }
 
