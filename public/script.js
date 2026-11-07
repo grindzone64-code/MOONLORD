@@ -408,8 +408,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- API HANDLERS ---
-    const DEFAULT_CLOUD_HOST = 'https://moonlord.onrender.com';
-    const LIFETIME_FALLBACK_HOST = 'https://moonlord.onrender.com';
+    const DEFAULT_CLOUD_HOST = 'https://moonlord-2.onrender.com';
+    const LIFETIME_FALLBACK_HOST = 'https://moonlord-2.onrender.com';
     const isAndroidDevice = /Android/i.test(navigator.userAgent) || 
         (typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.host.includes('androidplatform.net')));
 
@@ -442,7 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return '/api';
         }
         if (window._activeDetectedHost) return window._activeDetectedHost + '/api';
-        return 'https://moonlord.onrender.com/api';
+        return 'https://moonlord-2.onrender.com/api';
     }
 
     function setBackendOnline(isOnline) {
@@ -461,10 +461,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Manual server host config on tap
     window.editServerHost = function() {
         const storage = (typeof safeStorage !== 'undefined' ? safeStorage : (typeof localStorage !== 'undefined' ? localStorage : null));
-        const cur = (storage ? storage.getItem('moonlord_api_host') : null) || 'https://moonlord.onrender.com';
+        const cur = (storage ? storage.getItem('moonlord_api_host') : null) || 'https://moonlord-2.onrender.com';
         const input = prompt(
             "Configure Server Host / IP Address:\n\n" +
-            "• 24/7 Cloud Host: https://moonlord.onrender.com\n" +
+            "• 24/7 Cloud Host: https://moonlord-2.onrender.com\n" +
             "• PC on Same Wi-Fi: http://192.168.1.3:5000\n" +
             "• Termux on Phone: http://127.0.0.1:5000\n\nEnter server address:",
             cur
@@ -531,6 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = storage ? storage.getItem('moonlord_api_host') : null;
         const candidates = [
             saved,
+            'https://moonlord-2.onrender.com',
             'https://moonlord.onrender.com',
             'http://192.168.1.3:5000',
             'http://127.0.0.1:5000',
