@@ -392,6 +392,30 @@ class NativePlayer {
             } catch (e) {}
         }
 
+        // Primary: Query Lavalink v4 node (node.bgcrazy.in:25575) for guaranteed unblocked track resolution
+        try {
+            const axios = require('axios');
+            const lavaIdent = isYouTube || trimmed.startsWith('http') ? trimmed : `ytsearch:${trimmed}`;
+            const lavaRes = await axios.get(`http://node.bgcrazy.in:25575/v4/loadtracks?identifier=${encodeURIComponent(lavaIdent)}`, {
+                headers: { 'Authorization': 'Mark1234' },
+                timeout: 3500
+            });
+            if (lavaRes.data && lavaRes.data.data) {
+                const item = Array.isArray(lavaRes.data.data) ? lavaRes.data.data[0] : lavaRes.data.data;
+                if (item && item.info && item.info.title) {
+                    return {
+                        title: item.info.title,
+                        author: item.info.author || 'YouTube',
+                        url: item.info.uri || trimmed,
+                        duration: item.info.length || 0,
+                        thumbnail: item.info.artworkUrl || (item.info.identifier ? `https://i.ytimg.com/vi/${item.info.identifier}/hqdefault.jpg` : ''),
+                        encoded: item.encoded,
+                        isLocal: false
+                    };
+                }
+            }
+        } catch (lavaErr) {}
+
         try {
             if (videoId) {
                 // 1. Try public oEmbed first for instant zero-block metadata

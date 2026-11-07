@@ -534,6 +534,27 @@ class WebServer {
                         bot.client.channels.cache.set(targetChannel.id, targetChannel);
                     }
 
+                    const botRainlink = bot.client?.rainlink || bot.rainlink;
+                    if (botRainlink && botRainlink.nodes && botRainlink.nodes.some(n => n.state === 1)) {
+                        console.log(`[Join] Bot #${bot.index} (${bot.license || 'global'}) connecting via Lavalink: ${targetChannel.name} (${targetChannel.id})`);
+                        let p = botRainlink.players.get(targetChannel.guild.id);
+                        if (!p) {
+                            await botRainlink.players.create({
+                                guildId: targetChannel.guild.id,
+                                voiceId: targetChannel.id,
+                                textId: targetChannel.id,
+                                shardId: 0,
+                                deaf: Boolean(deaf)
+                            });
+                        } else if (p.voiceId !== targetChannel.id) {
+                            p.setVoiceChannel(targetChannel.id);
+                        }
+                        const bState = nativePlayer.getBotState(bot);
+                        bState.channelId = targetChannel.id;
+                        bState.guildId = targetChannel.guild.id;
+                        return { success: true, botIndex: bot.index };
+                    }
+
                     console.log(`[Join] Bot #${bot.index} (${bot.license || 'global'}) connecting to voice channel: ${targetChannel.name} (${targetChannel.id})`);
                     await nativePlayer.joinChannel(bot, targetChannel, { deaf, mute });
                     return { success: true, botIndex: bot.index };
@@ -585,6 +606,12 @@ class WebServer {
                         });
                     }
 
+                    const botRainlink = bot.client?.rainlink || bot.rainlink;
+                    if (botRainlink && botRainlink.players) {
+                        for (const p of botRainlink.players.values()) {
+                            try { p.destroy(); } catch (e) {}
+                        }
+                    }
                     nativePlayer.disconnect(bot);
                     disconnected++;
                 } catch (e) {
@@ -813,6 +840,38 @@ class WebServer {
         // Music Playback Endpoints
         this.app.get('/api/music/state', (req, res) => {
             const bots = this.getBotPool(req).filter(b => b.client && b.client.isReady());
+            for (const b of bots) {
+                const r = b.client?.rainlink || b.rainlink;
+                if (r && r.players) {
+                    for (const p of r.players.values()) {
+                        if (p && (p.playing || p.paused) && p.queue?.current) {
+                            const cur = p.queue.current;
+                            return res.json({
+                                status: 'success',
+                                title: cur.title || 'Unknown Track',
+                                author: cur.author || 'YouTube',
+                                playing: p.playing && !p.paused,
+                                isPaused: Boolean(p.paused),
+                                track: {
+                                    title: cur.title || 'Unknown Track',
+                                    author: cur.author || 'YouTube',
+                                    uri: cur.uri || '',
+                                    duration: cur.duration || cur.length || 0,
+                                    thumbnail: cur.thumbnail || ''
+                                },
+                                position: Math.max(0, p.position || 0),
+                                duration: cur.duration || cur.length || 0,
+                                loop: p.loop === 'track',
+                                volume: p.volume || 100,
+                                gainDb: 0,
+                                bassDb: 0,
+                                filter: null,
+                                queueLength: p.queue.size || 0
+                            });
+                        }
+                    }
+                }
+            }
             const nativeState = nativePlayer.getState(bots);
             res.json(nativeState);
         });
@@ -828,6 +887,8 @@ class WebServer {
             const isMulti = (Array.isArray(targetBots) && targetBots.length > 1) || allBots === true || syncFleet === true;
             if (!isMulti) {
                 const alreadyInVoice = bots.find(b => {
+                    const r = b.client?.rainlink || b.rainlink;
+                    if (r && r.players && r.players.size > 0) return true;
                     const s = nativePlayer.getBotState(b);
                     return s.voiceConnection && s.voiceConnection.state?.status === 'ready';
                 });
@@ -844,12 +905,20 @@ class WebServer {
             }
 
             try {
-                const track = await nativePlayer.resolveTrack(query);
-
-                // Identify channel ID for fleet: explicit channel_id, existing bot channel, or owner channel
+                // Identify channel ID for fleet
                 let resolvedChannelId = channel_id || null;
                 if (!resolvedChannelId) {
                     for (const b of bots) {
+                        const r = b.client?.rainlink || b.rainlink;
+                        if (r && r.players && r.players.size > 0) {
+                            for (const p of r.players.values()) {
+                                if (p.voiceId) {
+                                    resolvedChannelId = p.voiceId;
+                                    break;
+                                }
+                            }
+                        }
+                        if (resolvedChannelId) break;
                         const bState = nativePlayer.getBotState(b);
                         if (bState.channelId) {
                             resolvedChannelId = bState.channelId;
@@ -878,6 +947,91 @@ class WebServer {
                     }
                 }
 
+                // 1. Resolve track (Lavalink node.bgcrazy.in:25575 as primary)
+                let track = null;
+                let lavalinkTrack = null;
+                const leaderBot = bots[0];
+                const leaderRainlink = leaderBot.client?.rainlink || leaderBot.rainlink;
+
+                if (leaderRainlink) {
+                    try {
+                        const searchRes = await leaderRainlink.search(query);
+                        if (searchRes && searchRes.tracks && searchRes.tracks.length > 0) {
+                            lavalinkTrack = searchRes.tracks[0];
+                            track = {
+                                title: lavalinkTrack.title,
+                                author: lavalinkTrack.author || 'YouTube',
+                                url: lavalinkTrack.uri || query,
+                                duration: lavalinkTrack.duration || lavalinkTrack.length || 0,
+                                thumbnail: lavalinkTrack.thumbnail || (lavalinkTrack.identifier ? `https://i.ytimg.com/vi/${lavalinkTrack.identifier}/hqdefault.jpg` : ''),
+                                isLocal: false,
+                                encoded: lavalinkTrack.encoded
+                            };
+                            console.log(`[Play] Resolved track via Lavalink: "${track.title}"`);
+                        }
+                    } catch (lErr) {
+                        console.warn('[Play] Lavalink search warning:', lErr.message);
+                    }
+                }
+
+                if (!track) {
+                    track = await nativePlayer.resolveTrack(query);
+                }
+
+                // 2. Play via Lavalink if node is online
+                if (lavalinkTrack && leaderRainlink && leaderRainlink.nodes && leaderRainlink.nodes.some(n => n.state === 1)) {
+                    try {
+                        const playTasks = bots.map(async (bot) => {
+                            const botRainlink = bot.client?.rainlink || bot.rainlink;
+                            if (!botRainlink) return null;
+
+                            let targetChannel = null;
+                            if (resolvedChannelId) {
+                                for (const g of bot.client.guilds.cache.values()) {
+                                    targetChannel = g.channels.cache.get(resolvedChannelId);
+                                    if (targetChannel) break;
+                                }
+                                if (!targetChannel) {
+                                    targetChannel = bot.client.channels.cache.get(resolvedChannelId) || await bot.client.channels.fetch(resolvedChannelId).catch(() => null);
+                                }
+                            }
+                            if (!targetChannel) return null;
+
+                            let player = botRainlink.players.get(targetChannel.guild.id);
+                            if (!player) {
+                                player = await botRainlink.players.create({
+                                    guildId: targetChannel.guild.id,
+                                    voiceId: targetChannel.id,
+                                    textId: targetChannel.id,
+                                    shardId: 0,
+                                    deaf: Boolean(deaf)
+                                });
+                            } else if (player.voiceId !== targetChannel.id) {
+                                player.setVoiceChannel(targetChannel.id);
+                            }
+
+                            player.queue.clear();
+                            player.queue.add(lavalinkTrack);
+                            await player.play();
+                            return bot.index;
+                        });
+
+                        const playRes = await Promise.allSettled(playTasks);
+                        const successfulBots = playRes.filter(r => r.status === 'fulfilled' && r.value !== null);
+
+                        if (successfulBots.length > 0) {
+                            return res.json({
+                                status: 'success',
+                                message: `Playing: "${track.title}" on ${successfulBots.length} bot(s) (Lavalink Phase-Locked)`,
+                                track
+                            });
+                        }
+                    } catch (lPlayErr) {
+                        console.warn('[Play] Lavalink playback notice, falling back to NativePlayer:', lPlayErr.message);
+                    }
+                }
+
+                // 3. Fallback: NativePlayer
                 // Connect all target bots to voice channel first in parallel
                 await Promise.allSettled(bots.map(async (bot) => {
                     const botState = nativePlayer.getBotState(bot);
@@ -909,7 +1063,6 @@ class WebServer {
                 }
 
                 // Master-follower architecture: Leader plays track into Master AudioPlayer
-                const leaderBot = readyBots[0];
                 await nativePlayer.playTrack(leaderBot, track);
 
                 // Synchronize all ready followers to the master AudioPlayer for 0ms skew phase-lock
@@ -932,6 +1085,12 @@ class WebServer {
             const { targetBot, targetBots } = req.body;
             const bots = this.getTargetBots(targetBot, targetBots, req);
             bots.forEach(b => {
+                const r = b.client?.rainlink || b.rainlink;
+                if (r && r.players) {
+                    for (const p of r.players.values()) {
+                        try { p.setPause(true); } catch (e) {}
+                    }
+                }
                 nativePlayer.pause(b);
             });
             res.json({ status: 'success', message: 'Playback paused' });
@@ -941,6 +1100,12 @@ class WebServer {
             const { targetBot, targetBots } = req.body;
             const bots = this.getTargetBots(targetBot, targetBots, req);
             bots.forEach(b => {
+                const r = b.client?.rainlink || b.rainlink;
+                if (r && r.players) {
+                    for (const p of r.players.values()) {
+                        try { p.setPause(false); } catch (e) {}
+                    }
+                }
                 nativePlayer.resume(b);
             });
             res.json({ status: 'success', message: 'Playback resumed' });
@@ -950,6 +1115,12 @@ class WebServer {
             const { targetBot, targetBots } = req.body;
             const bots = this.getTargetBots(targetBot, targetBots, req);
             bots.forEach(b => {
+                const r = b.client?.rainlink || b.rainlink;
+                if (r && r.players) {
+                    for (const p of r.players.values()) {
+                        try { p.skip(); } catch (e) {}
+                    }
+                }
                 nativePlayer.skip(b);
             });
             res.json({ status: 'success', message: 'Skipped track' });
@@ -959,6 +1130,12 @@ class WebServer {
             const { targetBot, targetBots } = req.body;
             const bots = this.getTargetBots(targetBot, targetBots, req);
             bots.forEach(b => {
+                const r = b.client?.rainlink || b.rainlink;
+                if (r && r.players) {
+                    for (const p of r.players.values()) {
+                        try { p.stop(); p.destroy(); } catch (e) {}
+                    }
+                }
                 nativePlayer.stop(b);
             });
             res.json({ status: 'success', message: 'Stopped track' });
@@ -967,19 +1144,62 @@ class WebServer {
         this.app.post('/api/music/loop', (req, res) => {
             const { loop, targetBot, targetBots } = req.body;
             const bots = this.getTargetBots(targetBot, targetBots, req);
+            let loopRes = loop;
             bots.forEach(b => {
+                const r = b.client?.rainlink || b.rainlink;
+                if (r && r.players) {
+                    for (const p of r.players.values()) {
+                        try {
+                            const newMode = p.loop === 'track' ? 'none' : 'track';
+                            p.setLoop(newMode);
+                            loopRes = newMode === 'track';
+                        } catch (e) {}
+                    }
+                }
                 nativePlayer.setLoop(b, loop);
             });
-            res.json({ status: 'success', message: `Loop set to ${loop}` });
+            res.json({ status: 'success', loop: loopRes, message: `Loop set to ${loopRes}` });
         });
 
         this.app.post('/api/music/volume', (req, res) => {
             const { volume, targetBot, targetBots } = req.body;
+            const vol = parseInt(volume) || 100;
             const bots = this.getTargetBots(targetBot, targetBots, req);
             bots.forEach(b => {
+                const r = b.client?.rainlink || b.rainlink;
+                if (r && r.players) {
+                    for (const p of r.players.values()) {
+                        try { p.setVolume(vol); } catch (e) {}
+                    }
+                }
                 nativePlayer.setVolume(b, volume);
             });
             res.json({ status: 'success', volume, message: `Volume set to ${volume}` });
+        });
+
+        this.app.post('/api/music/seek', (req, res) => {
+            const { offset, position, targetBot, targetBots } = req.body;
+            const bots = this.getTargetBots(targetBot, targetBots, req);
+            let finalPos = 0;
+            bots.forEach(b => {
+                const r = b.client?.rainlink || b.rainlink;
+                if (r && r.players) {
+                    for (const p of r.players.values()) {
+                        try {
+                            const curPos = p.position || 0;
+                            const target = offset !== undefined ? Math.max(0, curPos + Number(offset)) : Number(position || 0);
+                            p.seek(target);
+                            finalPos = target;
+                        } catch (e) {}
+                    }
+                }
+                if (offset !== undefined) {
+                    finalPos = nativePlayer.seek(b, offset, true);
+                } else if (position !== undefined) {
+                    finalPos = nativePlayer.seek(b, position, false);
+                }
+            });
+            res.json({ status: 'success', position: finalPos, message: 'Position updated' });
         });
 
         this.app.post('/api/music/gain', (req, res) => {
@@ -1036,19 +1256,6 @@ class WebServer {
             }
         });
 
-        this.app.post('/api/music/seek', (req, res) => {
-            const { offset, position, targetBot, targetBots } = req.body;
-            const bots = this.getTargetBots(targetBot, targetBots, req);
-            let finalPos = 0;
-            bots.forEach(b => {
-                if (offset !== undefined) {
-                    finalPos = nativePlayer.seek(b, offset, true);
-                } else if (position !== undefined) {
-                    finalPos = nativePlayer.seek(b, position, false);
-                }
-            });
-            res.json({ status: 'success', position: finalPos, message: 'Position updated' });
-        });
 
         const VOLUME_MODES = [
             { name: 'clean', label: 'Clean', volume: 100, gainDb: 0 },

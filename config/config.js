@@ -9,5 +9,16 @@ module.exports = {
     'YOUR_DISCORD_USER_ID'
   ],
 
-  prefix: ''
+  prefix: '',
+
+  nodes: [
+    {
+      name: 'bgcrazy-node',
+      host: 'node.bgcrazy.in',
+      port: 25575,
+      auth: 'Mark1234',
+      secure: false,
+      driver: 'lavalink/v4'
+    }
+  ]
 };

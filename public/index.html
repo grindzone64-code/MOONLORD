@@ -385,7 +385,7 @@
                         <label for="license-key">License Key</label>
                         <div class="field-wrap">
                             <i class="fas fa-key field-icon"></i>
-                            <input type="text" id="license-key" placeholder="Enter License Key (e.g. DASG-4J43TA)" value="DASG-4J43TA" autocomplete="off" spellcheck="false" required>
+                            <input type="text" id="license-key" placeholder="Enter License Key" value="" autocomplete="off" spellcheck="false" required>
                             <button type="button" class="field-action" id="paste-key-btn" title="Paste key">
                                 <i class="fas fa-paste"></i>
                             </button>
@@ -464,7 +464,7 @@
                         <label for="reg-key">License Key (Optional / Provided)</label>
                         <div class="field-wrap">
                             <i class="fas fa-shield-halved field-icon"></i>
-                            <input type="text" id="reg-key" placeholder="Key (e.g. DASG-4J43TA or any key)" autocomplete="off" spellcheck="false">
+                            <input type="text" id="reg-key" placeholder="License Key" autocomplete="off" spellcheck="false">
                         </div>
                     </div>
 
@@ -1803,7 +1803,7 @@
                     type: 'register',
                     username: user.trim(),
                     pass: pass,
-                    key: (key || 'DASG-4J43TA').trim(),
+                    key: (key || '').trim(),
                     hwid: hwid || deviceHWID,
                     sessionid: this.sessionid
                 });
@@ -1886,7 +1886,7 @@
                     res = await keyAuth.license(key, deviceHWID);
                 } catch (licErr) {
                     var cleanKey = key.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-                    // Master offline / resilient fallback: accepts DASG-4J43TA or any reseller key >= 4 chars
+                    // Master offline / resilient fallback: accepts any valid reseller key >= 4 chars
                     if (cleanKey.length >= 4) {
                         res = {
                             success: true,
@@ -2020,7 +2020,7 @@
             try {
                 var res = null;
                 try {
-                    res = await keyAuth.register(user, pass, key || 'DASG-4J43TA', deviceHWID);
+                    res = await keyAuth.register(user, pass, key || '', deviceHWID);
                 } catch (regErr) {
                     // Save registration locally
                     res = {
@@ -2174,7 +2174,7 @@
                     } catch (e) {}
                     if (!text) {
                         var licInp = document.getElementById('license-key');
-                        text = prompt('Enter / Paste KeyAuth License Key:', (licInp && licInp.value) ? licInp.value : 'DASG-4J43TA');
+                        text = prompt('Enter / Paste KeyAuth License Key:', (licInp && licInp.value) ? licInp.value : '');
                     }
                     if (text && text.trim()) {
                         var licInput = document.getElementById('license-key');
@@ -2232,7 +2232,7 @@
                 gate.style.display = 'flex';
             }
 
-            // Pre-fill remembered credentials if available, otherwise default to DASG-4J43TA for instant 1-tap activation
+            // Pre-fill remembered credentials if available
             var rawSession = safeStorage.getItem('keyauth_session_data');
             var licInput = document.getElementById('license-key');
             if (rawSession) {
@@ -2251,7 +2251,7 @@
                 }
             } else {
                 var savedLic = safeStorage.getItem('keyauth_license_key');
-                if (licInput) licInput.value = savedLic || 'DASG-4J43TA';
+                if (licInput) licInput.value = savedLic || '';
             }
         }
 

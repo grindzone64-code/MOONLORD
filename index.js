@@ -109,6 +109,59 @@ global.initializeClient = initializeClient;
 function initializeClient(client, token, index) {
   client.config = config;
 
+  // Lavalink v4 Client Integration (node.bgcrazy.in:25575)
+  try {
+    const { Rainlink, Library } = require('rainlink');
+    const nodes = global.config?.nodes || [
+      {
+        name: 'bgcrazy-node',
+        host: 'node.bgcrazy.in',
+        port: 25575,
+        auth: 'Mark1234',
+        secure: false,
+        driver: 'lavalink/v4'
+      }
+    ];
+
+    const lib = new Library.DiscordJS(client);
+    const rainlink = new Rainlink({
+      library: lib,
+      nodes
+    });
+
+    rainlink.on('nodeConnect', (node) => {
+      console.log(`[Client ${index}] [Lavalink] Connected to Lavalink v4 node: ${node.options.name} (${node.options.host}:${node.options.port})`);
+    });
+
+    rainlink.on('nodeError', (node, err) => {
+      console.warn(`[Client ${index}] [Lavalink] Node notice (${node.options.name}):`, err.message);
+    });
+
+    rainlink.on('trackStart', (player, track) => {
+      console.log(`[Client ${index}] [Lavalink] Now Playing: "${track.title}" in VC ${player.voiceId}`);
+    });
+
+    rainlink.on('trackEnd', (player, track) => {
+      console.log(`[Client ${index}] [Lavalink] Track finished: "${track.title}"`);
+    });
+
+    const triggerReady = () => {
+      try {
+        lib.ready(rainlink.rainlinkOptions.nodes);
+      } catch (e) {}
+    };
+
+    if (client.isReady()) {
+      triggerReady();
+    } else {
+      client.once('ready', triggerReady);
+    }
+
+    client.rainlink = rainlink;
+  } catch (lavalinkErr) {
+    console.warn(`[Client ${index}] Lavalink setup notice:`, lavalinkErr.message);
+  }
+
   /* ✅ READY EVENT + RPC */
   client.on('ready', async () => {
     console.log(`[Client ${index}] Logged in as ${client.user.tag}`);
