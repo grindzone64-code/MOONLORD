@@ -6,7 +6,7 @@
   "bin": "launcher.js",
   "scripts": {
     "start": "node index.js",
-    "postinstall": "node utils/ensureYtdl.js",
+    "postinstall": "node -e \"const fs=require('fs'); if(fs.existsSync('./utils/ensureYtdl.js')){ try{ require('./utils/ensureYtdl').ensureYtdl(); }catch(e){} }\"",
     "app": "electron .",
     "icon": "node gen-icon.js",
     "dist": "electron-builder --win portable",

@@ -438,7 +438,7 @@ class NativePlayer {
                 args.push('-i', track.url);
                 if (af) args.push('-af', af);
                 args.push('-vn');
-                args.push('-c:a', 'libopus', '-b:a', '128k', '-f', 'ogg', 'pipe:1');
+                args.push('-c:a', 'libopus', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-f', 'ogg', 'pipe:1');
 
                 const ff = spawn(ffmpegExe, args, { windowsHide: true });
                 state.ffmpegProc = ff;
@@ -490,7 +490,7 @@ class NativePlayer {
         ffArgs.push('-i', 'pipe:0');
         if (af) ffArgs.push('-af', af);
         ffArgs.push('-vn'); // Essential: discards video so Discord voice demuxer receives pure audio OggOpus stream
-        ffArgs.push('-c:a', 'libopus', '-b:a', '128k', '-f', 'ogg', 'pipe:1');
+        ffArgs.push('-c:a', 'libopus', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-f', 'ogg', 'pipe:1');
 
         const ffmpegProc = spawn(ffmpegExe, ffArgs, { windowsHide: true });
         state.ffmpegProc = ffmpegProc;
