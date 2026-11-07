@@ -3,7 +3,13 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 function ensureYtdl() {
-    if (process.platform === 'win32') return;
+    if (process.platform === 'win32') {
+        const winBin = path.join(__dirname, '..', 'bin', 'yt-dlp.exe');
+        if (fs.existsSync(winBin)) return winBin;
+        const winRoot = path.join(__dirname, '..', 'yt-dlp.exe');
+        if (fs.existsSync(winRoot)) return winRoot;
+        return null;
+    }
 
     const binDir = path.join(__dirname, '..', 'bin');
     if (!fs.existsSync(binDir)) {
@@ -11,7 +17,14 @@ function ensureYtdl() {
     }
 
     const localBin = path.join(binDir, 'yt-dlp');
-    const systemBins = ['/usr/local/bin/yt-dlp', '/usr/bin/yt-dlp', '/tmp/yt-dlp', localBin];
+    const systemBins = [
+        localBin,
+        path.join(process.cwd(), 'bin', 'yt-dlp'),
+        '/usr/local/bin/yt-dlp',
+        '/usr/bin/yt-dlp',
+        '/tmp/yt-dlp',
+        path.join(__dirname, '..', 'yt-dlp')
+    ];
 
     for (const b of systemBins) {
         if (fs.existsSync(b)) {
@@ -21,19 +34,21 @@ function ensureYtdl() {
     }
 
     try {
-        console.log('[ensureYtdl] Downloading standalone yt-dlp binary for Linux...');
+        console.log('[ensureYtdl] Downloading standalone yt-dlp binary into project bin directory...');
         execSync(`curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "${localBin}" && chmod +x "${localBin}"`, { timeout: 45000 });
         if (fs.existsSync(localBin)) {
+            try { fs.chmodSync(localBin, 0o755); } catch (e) {}
             console.log('[ensureYtdl] Successfully installed yt-dlp to', localBin);
             return localBin;
         }
     } catch (e) {
-        console.warn('[ensureYtdl] Download failed:', e.message);
+        console.warn('[ensureYtdl] Download to bin failed:', e.message);
     }
 
     try {
         execSync(`curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /tmp/yt-dlp && chmod +x /tmp/yt-dlp`, { timeout: 45000 });
         if (fs.existsSync('/tmp/yt-dlp')) {
+            try { fs.chmodSync('/tmp/yt-dlp', 0o755); } catch (e) {}
             console.log('[ensureYtdl] Successfully installed yt-dlp to /tmp/yt-dlp');
             return '/tmp/yt-dlp';
         }
@@ -47,4 +62,5 @@ if (require.main === module) {
 }
 
 module.exports = { ensureYtdl };
+
 

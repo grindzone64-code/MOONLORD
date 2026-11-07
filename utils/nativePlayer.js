@@ -16,11 +16,14 @@ const {
 // Helper: check YouTube title or detect unavailable/private status via yt-dlp
 function checkYtDlpTitle(url) {
     const ytdlExe = getYtdlExecutable();
+    const cookieArgs = getCookieArgs();
     return new Promise((resolve, reject) => {
         execFile(ytdlExe, [
             '--no-warnings',
             '--js-runtimes', 'node',
-            '--extractor-args', 'youtube:player_client=android,ios,web',
+            '-4',
+            ...cookieArgs,
+            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
             '--get-title',
             '--no-playlist',
             url
@@ -37,16 +40,46 @@ function checkYtDlpTitle(url) {
     });
 }
 
-// Helper: locate yt-dlp binary across environments (Windows, Linux Docker, Render cloud)
+// Helper: locate cookies file if provided by user
+function getCookieArgs() {
+    const possiblePaths = [
+        path.join(process.cwd(), 'cookies.txt'),
+        path.join(process.cwd(), 'data', 'cookies.txt'),
+        path.join(__dirname, '..', 'cookies.txt'),
+        path.join(__dirname, '..', 'data', 'cookies.txt'),
+        process.env.PORTABLE_EXECUTABLE_DIR ? path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'cookies.txt') : null
+    ].filter(Boolean);
+
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p) && fs.statSync(p).size > 10) {
+            return ['--cookies', p];
+        }
+    }
+
+    if (process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.length > 20) {
+        try {
+            const target = path.join(process.cwd(), 'data', 'cookies.txt');
+            fs.mkdirSync(path.dirname(target), { recursive: true });
+            fs.writeFileSync(target, process.env.YOUTUBE_COOKIES, 'utf8');
+            return ['--cookies', target];
+        } catch (e) {}
+    }
+
+    return [];
+}
+
+// Helper: locate yt-dlp binary across environments (Windows, Linux Docker, Render cloud, Electron)
 function getYtdlExecutable() {
     const isWin = process.platform === 'win32';
     const candidates = isWin ? [
+        process.resourcesPath ? path.join(process.resourcesPath, 'bin', 'yt-dlp.exe') : null,
+        process.resourcesPath ? path.join(process.resourcesPath, 'app', 'bin', 'yt-dlp.exe') : null,
         path.join(__dirname, '..', 'bin', 'yt-dlp.exe'),
         path.join(__dirname, '..', 'yt-dlp.exe'),
         path.join(process.cwd(), 'bin', 'yt-dlp.exe'),
         path.join(process.cwd(), 'yt-dlp.exe'),
         'C:\\Users\\chint\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\yt-dlp.exe'
-    ] : [
+    ].filter(Boolean) : [
         path.join(__dirname, '..', 'bin', 'yt-dlp'),
         path.join(process.cwd(), 'bin', 'yt-dlp'),
         '/usr/local/bin/yt-dlp',
@@ -352,6 +385,23 @@ class NativePlayer {
 
         try {
             if (videoId) {
+                // 1. Try public oEmbed first for instant zero-block metadata
+                try {
+                    const axios = require('axios');
+                    const oEmbedRes = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, { timeout: 3500 });
+                    if (oEmbedRes.data && oEmbedRes.data.title) {
+                        return {
+                            title: oEmbedRes.data.title,
+                            author: oEmbedRes.data.author_name || 'YouTube',
+                            url: trimmed,
+                            duration: 0,
+                            thumbnail: oEmbedRes.data.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                            isLocal: false
+                        };
+                    }
+                } catch (oeErr) {}
+
+                // 2. Try yt-search
                 const res = await ytSearch({ videoId }).catch(() => null);
                 if (res && res.title) {
                     return {
@@ -380,32 +430,19 @@ class NativePlayer {
                 }
             }
         } catch (searchErr) {
-            console.warn('[NativePlayer] ytSearch notice:', searchErr.message);
+            console.warn('[NativePlayer] search notice:', searchErr.message);
         }
 
-        // For YouTube URLs where yt-search could not find metadata, validate via yt-dlp
+        // For YouTube URLs, always construct a valid track object without failing or throwing bot block
         if (isYouTube) {
-            try {
-                const title = await checkYtDlpTitle(trimmed);
-                return {
-                    title: title || 'YouTube Audio',
-                    author: 'YouTube',
-                    url: trimmed,
-                    duration: 0,
-                    thumbnail: '',
-                    isLocal: false
-                };
-            } catch (titleErr) {
-                console.warn('[NativePlayer] checkYtDlpTitle fallback:', titleErr.message);
-                return {
-                    title: videoId ? `YouTube (${videoId})` : 'YouTube Audio',
-                    author: 'YouTube',
-                    url: trimmed,
-                    duration: 0,
-                    thumbnail: '',
-                    isLocal: false
-                };
-            }
+            return {
+                title: videoId ? `YouTube (${videoId})` : 'YouTube Audio',
+                author: 'YouTube',
+                url: trimmed,
+                duration: 0,
+                thumbnail: videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : '',
+                isLocal: false
+            };
         }
 
         if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
@@ -462,37 +499,100 @@ class NativePlayer {
         }
 
         const ytdlExe = getYtdlExecutable();
-        console.log(`[NativePlayer] Spawning yt-dlp audio stream using (${ytdlExe}) for: ${track.title} [filter=${state.filter || 'none'}, seek=${seekSec}s, gain=${state.gainDb}dB, bass=${state.bassDb}dB]`);
+        const cookieArgs = getCookieArgs();
+        console.log(`[NativePlayer] Spawning audio stream via (${ytdlExe}) for: "${track.title}" [cookies=${cookieArgs.length > 0}, seek=${seekSec}s, gain=${state.gainDb}dB, bass=${state.bassDb}dB]`);
 
-        const ytdlProc = spawn(ytdlExe, [
+        const { PassThrough } = require('stream');
+        const inputStream = new PassThrough();
+        let hasOutputData = false;
+        let fallbackTriggered = false;
+
+        const triggerFallback = (reason) => {
+            if (fallbackTriggered || hasOutputData) return;
+            fallbackTriggered = true;
+            console.log(`[NativePlayer] Notice (${reason}). Seamlessly activating high-fidelity SoundCloud fallback stream for: "${track.title}"`);
+
+            const scArgs = [
+                '--no-warnings',
+                '-4',
+                '-f', 'ba/b',
+                '-o', '-',
+                '--no-playlist',
+                '--quiet',
+                `scsearch1:${track.title}`
+            ];
+
+            const scProc = spawn(ytdlExe, scArgs, { windowsHide: true });
+            state.ytdlProc = scProc;
+
+            scProc.stdout.on('data', () => {
+                hasOutputData = true;
+            });
+            scProc.stdout.pipe(inputStream);
+
+            scProc.stderr.on('data', (d) => {
+                const errStr = d.toString().trim();
+                if (errStr && !errStr.includes('WARNING:')) {
+                    console.warn('[Fallback stderr]:', errStr.slice(0, 100));
+                }
+            });
+
+            scProc.on('close', () => {
+                if (state.ytdlProc === scProc) state.ytdlProc = null;
+            });
+
+            scProc.on('error', (err) => {
+                console.error('[NativePlayer] Fallback spawn error:', err.message);
+                if (state.ytdlProc === scProc) state.ytdlProc = null;
+            });
+        };
+
+        const ytdlArgs = [
             '--no-warnings',
-            '--extractor-args', 'youtube:player_client=android,web',
+            '--js-runtimes', 'node',
+            '-4',
+            ...cookieArgs,
+            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
             '-f', 'ba/b',
             '-o', '-',
             '--no-playlist',
             '--quiet',
             track.url
-        ], { windowsHide: true });
+        ];
 
+        const ytdlProc = spawn(ytdlExe, ytdlArgs, { windowsHide: true });
         state.ytdlProc = ytdlProc;
+
+        ytdlProc.stdout.on('data', () => {
+            hasOutputData = true;
+        });
+        ytdlProc.stdout.pipe(inputStream);
 
         ytdlProc.stderr.on('data', (d) => {
             const errStr = d.toString().trim();
             if (errStr && !errStr.includes('WARNING:')) {
                 console.warn('[yt-dlp stderr]:', errStr.slice(0, 120));
+                if (/bot|sign in|confirm you're not a bot|403|forbidden/i.test(errStr)) {
+                    triggerFallback(errStr.slice(0, 80));
+                }
             }
         });
 
-        ytdlProc.on('close', () => {
-            if (state.ytdlProc === ytdlProc) state.ytdlProc = null;
+        ytdlProc.on('close', (code) => {
+            if (!hasOutputData && code !== 0) {
+                triggerFallback(`Process exited with code ${code}`);
+            }
+            if (state.ytdlProc === ytdlProc && !fallbackTriggered) {
+                state.ytdlProc = null;
+            }
         });
 
         ytdlProc.on('error', (err) => {
             console.error('[NativePlayer] yt-dlp spawn error:', err.message);
-            if (state.ytdlProc === ytdlProc) state.ytdlProc = null;
+            triggerFallback(err.message);
         });
 
-        // Always pipe yt-dlp through ffmpeg to guarantee a valid Opus stream for Discord voice
+        // Always pipe inputStream through ffmpeg to guarantee a valid 48kHz stereo Opus stream for Discord voice
         const ffArgs = [];
         if (seekSec > 0) ffArgs.push('-ss', seekSec.toFixed(2));
         ffArgs.push('-i', 'pipe:0');
@@ -504,21 +604,21 @@ class NativePlayer {
         state.ffmpegProc = ffmpegProc;
 
         ffmpegProc.stderr.on('data', () => {});
-        ytdlProc.stdout.pipe(ffmpegProc.stdin);
+        inputStream.pipe(ffmpegProc.stdin);
 
-        ytdlProc.stdout.on('error', () => {});
+        inputStream.on('error', () => {});
         ffmpegProc.stdin.on('error', () => {});
 
         ffmpegProc.on('close', () => {
             if (state.ffmpegProc === ffmpegProc) state.ffmpegProc = null;
-            if (state.ytdlProc === ytdlProc) {
-                try { ytdlProc.kill('SIGKILL'); } catch (e) {}
+            if (state.ytdlProc) {
+                try { state.ytdlProc.kill('SIGKILL'); } catch (e) {}
                 state.ytdlProc = null;
             }
         });
 
         ffmpegProc.on('error', (err) => {
-            console.error('[NativePlayer] ffmpeg filter error:', err.message);
+            console.error('[NativePlayer] ffmpeg error:', err.message);
             if (state.ffmpegProc === ffmpegProc) state.ffmpegProc = null;
         });
 

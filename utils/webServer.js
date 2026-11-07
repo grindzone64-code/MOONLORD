@@ -1009,6 +1009,33 @@ class WebServer {
             res.json({ status: 'success', filter, message: `Filter set to ${filter}` });
         });
 
+        this.app.get('/api/music/cookies', (req, res) => {
+            const cookieFile = path.join(process.cwd(), 'data', 'cookies.txt');
+            const rootFile = path.join(process.cwd(), 'cookies.txt');
+            const hasCookies = (fs.existsSync(cookieFile) && fs.statSync(cookieFile).size > 10) ||
+                              (fs.existsSync(rootFile) && fs.statSync(rootFile).size > 10) ||
+                              Boolean(process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.length > 20);
+            res.json({ status: 'success', hasCookies });
+        });
+
+        this.app.post('/api/music/cookies', (req, res) => {
+            const { cookies } = req.body;
+            if (!cookies || typeof cookies !== 'string' || cookies.trim().length === 0) {
+                return res.status(400).json({ status: 'error', message: 'Cookies content cannot be empty' });
+            }
+            try {
+                const cookieDir = path.join(process.cwd(), 'data');
+                fs.mkdirSync(cookieDir, { recursive: true });
+                const cookieFile = path.join(cookieDir, 'cookies.txt');
+                fs.writeFileSync(cookieFile, cookies.trim(), 'utf8');
+                console.log('[WebServer] YouTube cookies updated successfully in', cookieFile);
+                res.json({ status: 'success', message: 'YouTube cookies saved and activated successfully!' });
+            } catch (err) {
+                console.error('[WebServer] Error saving cookies:', err.message);
+                res.status(500).json({ status: 'error', message: err.message });
+            }
+        });
+
         this.app.post('/api/music/seek', (req, res) => {
             const { offset, position, targetBot, targetBots } = req.body;
             const bots = this.getTargetBots(targetBot, targetBots, req);
