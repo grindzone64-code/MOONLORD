@@ -6,6 +6,20 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const nativePlayer = require('./nativePlayer');
 
+function isRainlinkOnline(r) {
+    if (!r || !r.nodes) return false;
+    try {
+        if (typeof r.nodes.all === 'function') {
+            const list = r.nodes.all();
+            return Array.isArray(list) && list.some(n => n.online || n.state === 0 || n.state === 1);
+        }
+        if (Array.isArray(r.nodes)) {
+            return r.nodes.some(n => n.online || n.state === 0 || n.state === 1);
+        }
+    } catch (e) {}
+    return false;
+}
+
 class WebServer {
     constructor() {
         this.app = express();
@@ -535,24 +549,28 @@ class WebServer {
                     }
 
                     const botRainlink = bot.client?.rainlink || bot.rainlink;
-                    if (botRainlink && botRainlink.nodes && botRainlink.nodes.some(n => n.state === 1)) {
-                        console.log(`[Join] Bot #${bot.index} (${bot.license || 'global'}) connecting via Lavalink: ${targetChannel.name} (${targetChannel.id})`);
-                        let p = botRainlink.players.get(targetChannel.guild.id);
-                        if (!p) {
-                            await botRainlink.players.create({
-                                guildId: targetChannel.guild.id,
-                                voiceId: targetChannel.id,
-                                textId: targetChannel.id,
-                                shardId: 0,
-                                deaf: Boolean(deaf)
-                            });
-                        } else if (p.voiceId !== targetChannel.id) {
-                            p.setVoiceChannel(targetChannel.id);
+                    if (isRainlinkOnline(botRainlink)) {
+                        try {
+                            console.log(`[Join] Bot #${bot.index} (${bot.license || 'global'}) connecting via Lavalink: ${targetChannel.name} (${targetChannel.id})`);
+                            let p = botRainlink.players.get(targetChannel.guild.id);
+                            if (!p) {
+                                await botRainlink.players.create({
+                                    guildId: targetChannel.guild.id,
+                                    voiceId: targetChannel.id,
+                                    textId: targetChannel.id,
+                                    shardId: 0,
+                                    deaf: Boolean(deaf)
+                                });
+                            } else if (p.voiceId !== targetChannel.id) {
+                                p.setVoiceChannel(targetChannel.id);
+                            }
+                            const bState = nativePlayer.getBotState(bot);
+                            bState.channelId = targetChannel.id;
+                            bState.guildId = targetChannel.guild.id;
+                            return { success: true, botIndex: bot.index };
+                        } catch (lavaJoinErr) {
+                            console.warn(`[Join] Lavalink join notice for Bot #${bot.index}, falling back to native:`, lavaJoinErr.message);
                         }
-                        const bState = nativePlayer.getBotState(bot);
-                        bState.channelId = targetChannel.id;
-                        bState.guildId = targetChannel.guild.id;
-                        return { success: true, botIndex: bot.index };
                     }
 
                     console.log(`[Join] Bot #${bot.index} (${bot.license || 'global'}) connecting to voice channel: ${targetChannel.name} (${targetChannel.id})`);
@@ -979,7 +997,7 @@ class WebServer {
                 }
 
                 // 2. Play via Lavalink if node is online
-                if (lavalinkTrack && leaderRainlink && leaderRainlink.nodes && leaderRainlink.nodes.some(n => n.state === 1)) {
+                if (lavalinkTrack && leaderRainlink && isRainlinkOnline(leaderRainlink)) {
                     try {
                         const playTasks = bots.map(async (bot) => {
                             const botRainlink = bot.client?.rainlink || bot.rainlink;
