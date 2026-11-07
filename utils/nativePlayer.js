@@ -235,8 +235,7 @@ class NativePlayer {
             adapterCreator: guild.voiceAdapterCreator,
             selfDeaf: Boolean(options.selfDeaf ?? options.deaf),
             selfMute: false,
-            group: botGroup,
-            daveEncryption: false
+            group: botGroup
         });
 
         state.voiceConnection = connection;
@@ -246,15 +245,15 @@ class NativePlayer {
         connection.on('stateChange', (oldState, newState) => {
             console.log(`[NativePlayer] [${botLic}] Bot #${bot.index} voice status: ${oldState.status} -> ${newState.status}`);
             if (newState.status === VoiceConnectionStatus.Disconnected) {
-                Promise.race([
-                    entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
-                    entersState(connection, VoiceConnectionStatus.Connecting, 5_000)
-                ]).catch(() => {
-                    if (state.voiceConnection === connection) {
-                        try { connection.destroy(); } catch (e) {}
-                        state.voiceConnection = null;
-                    }
-                });
+                if (newState.reason === 0) {
+                    try { connection.rejoin(); } catch (e) {}
+                } else if (connection.rejoinAttempts < 5) {
+                    setTimeout(() => {
+                        try { connection.rejoin(); } catch (e) {}
+                    }, (connection.rejoinAttempts + 1) * 1000);
+                } else {
+                    try { connection.destroy(); } catch (e) {}
+                }
             } else if (newState.status === VoiceConnectionStatus.Destroyed) {
                 if (state.voiceConnection === connection) {
                     state.voiceConnection = null;
@@ -262,8 +261,17 @@ class NativePlayer {
             }
         });
 
-        await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
-        console.log(`[NativePlayer] [${botLic}] Bot #${bot.index} Voice connection READY in ${channel.name}!`);
+        try {
+            await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+            console.log(`[NativePlayer] [${botLic}] Bot #${bot.index} Voice connection READY in ${channel.name}!`);
+        } catch (connErr) {
+            console.error(`[NativePlayer] [${botLic}] Bot #${bot.index} entersState notice:`, connErr.message);
+            if (connection.state.status !== VoiceConnectionStatus.Ready) {
+                try { connection.destroy(); } catch (e) {}
+                state.voiceConnection = null;
+                throw new Error(`Voice connection to ${channel.name} timed out or was rejected by Discord.`);
+            }
+        }
 
         // If another bot in the SAME fleet/license is already actively playing, auto-subscribe for instant phase-locked playback
         for (const [id, s] of this.states.entries()) {
