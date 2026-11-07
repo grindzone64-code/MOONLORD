@@ -13,6 +13,15 @@ const {
     StreamType
 } = require('@discordjs/voice');
 
+// Primary in-process YouTube streaming engine (@distube/ytdl-core)
+let ytdlCoreClient = null;
+try {
+    const { Ytdl } = require('@distube/ytdl-core');
+    ytdlCoreClient = new Ytdl();
+} catch (e) {
+    console.warn('[NativePlayer] YTDL Core initialization notice:', e.message);
+}
+
 // Helper: check YouTube title or detect unavailable/private status via yt-dlp
 function checkYtDlpTitle(url) {
     const ytdlExe = getYtdlExecutable();
@@ -498,99 +507,137 @@ class NativePlayer {
             return { stream: fs.createReadStream(track.url), type: StreamType.Arbitrary };
         }
 
-        const ytdlExe = getYtdlExecutable();
-        const cookieArgs = getCookieArgs();
-        console.log(`[NativePlayer] Spawning audio stream via (${ytdlExe}) for: "${track.title}" [cookies=${cookieArgs.length > 0}, seek=${seekSec}s, gain=${state.gainDb}dB, bass=${state.bassDb}dB]`);
-
         const { PassThrough } = require('stream');
         const inputStream = new PassThrough();
         let hasOutputData = false;
         let fallbackTriggered = false;
+        const ytdlExe = getYtdlExecutable();
+        const cookieArgs = getCookieArgs();
 
         const triggerFallback = (reason) => {
             if (fallbackTriggered || hasOutputData) return;
             fallbackTriggered = true;
-            console.log(`[NativePlayer] Notice (${reason}). Seamlessly activating high-fidelity SoundCloud fallback stream for: "${track.title}"`);
+            console.log(`[NativePlayer] Notice (${reason}). Activating seamless high-fidelity fallback stream for: "${track.title}"`);
 
-            const scArgs = [
+            // Try yt-dlp first if available
+            try {
+                const scArgs = [
+                    '--no-warnings',
+                    '-4',
+                    '-f', 'ba/b',
+                    '-o', '-',
+                    '--no-playlist',
+                    '--quiet',
+                    `scsearch1:${track.title}`
+                ];
+
+                const scProc = spawn(ytdlExe, scArgs, { windowsHide: true });
+                state.ytdlProc = scProc;
+
+                scProc.stdout.on('data', () => {
+                    hasOutputData = true;
+                });
+                scProc.stdout.pipe(inputStream);
+
+                scProc.stderr.on('data', (d) => {
+                    const errStr = d.toString().trim();
+                    if (errStr && !errStr.includes('WARNING:')) {
+                        console.warn('[Fallback stderr]:', errStr.slice(0, 100));
+                    }
+                });
+
+                scProc.on('close', () => {
+                    if (state.ytdlProc === scProc) state.ytdlProc = null;
+                });
+
+                scProc.on('error', (err) => {
+                    console.error('[NativePlayer] Fallback spawn error:', err.message);
+                    if (state.ytdlProc === scProc) state.ytdlProc = null;
+                });
+            } catch (fbErr) {
+                console.error('[NativePlayer] Fallback launch error:', fbErr.message);
+            }
+        };
+
+        const isYouTubeUrl = /^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\/.+/i.test(track.url);
+
+        // 1. PRIMARY ENGINE: YTDL (@distube/ytdl-core in-process pure JavaScript stream)
+        let primaryLaunched = false;
+        if (isYouTubeUrl && ytdlCoreClient) {
+            try {
+                console.log(`[NativePlayer] [YTDL ENGINE] Streaming "${track.title}" via pure-JS YTDL core...`);
+                const ytdlStream = ytdlCoreClient.download(track.url, {
+                    filter: { hasAudio: true, hasVideo: false },
+                    highWaterMark: 1 << 25
+                });
+
+                ytdlStream.on('data', () => {
+                    hasOutputData = true;
+                });
+
+                ytdlStream.pipe(inputStream);
+
+                ytdlStream.on('error', (err) => {
+                    console.warn('[NativePlayer] YTDL core notice:', err.message);
+                    if (!hasOutputData) {
+                        triggerFallback('YTDL stream error: ' + err.message);
+                    }
+                });
+
+                primaryLaunched = true;
+            } catch (ytdlInitErr) {
+                console.warn('[NativePlayer] YTDL core direct start notice:', ytdlInitErr.message);
+            }
+        }
+
+        // 2. SECONDARY ENGINE: yt-dlp child process stream
+        if (!primaryLaunched) {
+            console.log(`[NativePlayer] Spawning audio stream via (${ytdlExe}) for: "${track.title}" [cookies=${cookieArgs.length > 0}, seek=${seekSec}s, gain=${state.gainDb}dB, bass=${state.bassDb}dB]`);
+            const ytdlArgs = [
                 '--no-warnings',
+                '--js-runtimes', 'node',
                 '-4',
+                ...cookieArgs,
+                '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                 '-f', 'ba/b',
                 '-o', '-',
                 '--no-playlist',
                 '--quiet',
-                `scsearch1:${track.title}`
+                track.url
             ];
 
-            const scProc = spawn(ytdlExe, scArgs, { windowsHide: true });
-            state.ytdlProc = scProc;
+            const ytdlProc = spawn(ytdlExe, ytdlArgs, { windowsHide: true });
+            state.ytdlProc = ytdlProc;
 
-            scProc.stdout.on('data', () => {
+            ytdlProc.stdout.on('data', () => {
                 hasOutputData = true;
             });
-            scProc.stdout.pipe(inputStream);
+            ytdlProc.stdout.pipe(inputStream);
 
-            scProc.stderr.on('data', (d) => {
+            ytdlProc.stderr.on('data', (d) => {
                 const errStr = d.toString().trim();
                 if (errStr && !errStr.includes('WARNING:')) {
-                    console.warn('[Fallback stderr]:', errStr.slice(0, 100));
+                    console.warn('[yt-dlp stderr]:', errStr.slice(0, 120));
+                    if (/bot|sign in|confirm you're not a bot|403|forbidden/i.test(errStr)) {
+                        triggerFallback(errStr.slice(0, 80));
+                    }
                 }
             });
 
-            scProc.on('close', () => {
-                if (state.ytdlProc === scProc) state.ytdlProc = null;
-            });
-
-            scProc.on('error', (err) => {
-                console.error('[NativePlayer] Fallback spawn error:', err.message);
-                if (state.ytdlProc === scProc) state.ytdlProc = null;
-            });
-        };
-
-        const ytdlArgs = [
-            '--no-warnings',
-            '--js-runtimes', 'node',
-            '-4',
-            ...cookieArgs,
-            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            '-f', 'ba/b',
-            '-o', '-',
-            '--no-playlist',
-            '--quiet',
-            track.url
-        ];
-
-        const ytdlProc = spawn(ytdlExe, ytdlArgs, { windowsHide: true });
-        state.ytdlProc = ytdlProc;
-
-        ytdlProc.stdout.on('data', () => {
-            hasOutputData = true;
-        });
-        ytdlProc.stdout.pipe(inputStream);
-
-        ytdlProc.stderr.on('data', (d) => {
-            const errStr = d.toString().trim();
-            if (errStr && !errStr.includes('WARNING:')) {
-                console.warn('[yt-dlp stderr]:', errStr.slice(0, 120));
-                if (/bot|sign in|confirm you're not a bot|403|forbidden/i.test(errStr)) {
-                    triggerFallback(errStr.slice(0, 80));
+            ytdlProc.on('close', (code) => {
+                if (!hasOutputData && code !== 0) {
+                    triggerFallback(`Process exited with code ${code}`);
                 }
-            }
-        });
+                if (state.ytdlProc === ytdlProc && !fallbackTriggered) {
+                    state.ytdlProc = null;
+                }
+            });
 
-        ytdlProc.on('close', (code) => {
-            if (!hasOutputData && code !== 0) {
-                triggerFallback(`Process exited with code ${code}`);
-            }
-            if (state.ytdlProc === ytdlProc && !fallbackTriggered) {
-                state.ytdlProc = null;
-            }
-        });
-
-        ytdlProc.on('error', (err) => {
-            console.error('[NativePlayer] yt-dlp spawn error:', err.message);
-            triggerFallback(err.message);
-        });
+            ytdlProc.on('error', (err) => {
+                console.error('[NativePlayer] yt-dlp spawn error:', err.message);
+                triggerFallback(err.message);
+            });
+        }
 
         // Always pipe inputStream through ffmpeg to guarantee a valid 48kHz stereo Opus stream for Discord voice
         const ffArgs = [];
