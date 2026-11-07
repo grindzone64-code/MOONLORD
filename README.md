@@ -113,3 +113,5 @@ Once running, access the web control panel at **`http://localhost:5000`**.
 ## License
 
 ISC License. Made for educational purposes.
+
+<!-- Deployment trigger: 2026-11-07 13:12:04 -->
