@@ -9,6 +9,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     curl \
     ca-certificates \
+    && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp \
+    && ln -sf /usr/local/bin/yt-dlp /usr/bin/yt-dlp \
+    && yt-dlp --version \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./

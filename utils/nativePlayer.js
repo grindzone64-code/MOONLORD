@@ -1,5 +1,5 @@
 const ytSearch = require('yt-search');
-const { spawn, execFile } = require('child_process');
+const { spawn, execFile, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const {
@@ -30,34 +30,75 @@ function checkYtDlpTitle(url) {
     });
 }
 
-// Helper: locate yt-dlp binary across environments
+// Helper: locate yt-dlp binary across environments (Windows, Linux Docker, Render cloud)
 function getYtdlExecutable() {
-    const candidates = [
+    const isWin = process.platform === 'win32';
+    const candidates = isWin ? [
         path.join(__dirname, '..', 'bin', 'yt-dlp.exe'),
         path.join(__dirname, '..', 'yt-dlp.exe'),
         path.join(process.cwd(), 'bin', 'yt-dlp.exe'),
         path.join(process.cwd(), 'yt-dlp.exe'),
         'C:\\Users\\chint\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\yt-dlp.exe'
+    ] : [
+        '/usr/local/bin/yt-dlp',
+        '/usr/bin/yt-dlp',
+        '/tmp/yt-dlp',
+        path.join(__dirname, '..', 'bin', 'yt-dlp'),
+        path.join(__dirname, '..', 'yt-dlp'),
+        path.join(process.cwd(), 'bin', 'yt-dlp'),
+        path.join(process.cwd(), 'yt-dlp')
     ];
 
     for (const c of candidates) {
         if (fs.existsSync(c)) {
+            if (!isWin) {
+                try { fs.chmodSync(c, 0o755); } catch (e) {}
+            }
             return c;
         }
     }
+
+    // On Linux/Cloud, if yt-dlp is missing, automatically download it to /tmp/yt-dlp as a self-healing fallback
+    if (!isWin) {
+        const tmpYtdl = '/tmp/yt-dlp';
+        if (fs.existsSync(tmpYtdl)) {
+            try { fs.chmodSync(tmpYtdl, 0o755); } catch (e) {}
+            return tmpYtdl;
+        }
+        try {
+            console.log('[NativePlayer] yt-dlp binary missing on Linux. Auto-downloading standalone binary to /tmp/yt-dlp...');
+            execSync('curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /tmp/yt-dlp && chmod +x /tmp/yt-dlp', { timeout: 30000 });
+            if (fs.existsSync(tmpYtdl)) {
+                console.log('[NativePlayer] Successfully downloaded yt-dlp to /tmp/yt-dlp');
+                return tmpYtdl;
+            }
+        } catch (downloadErr) {
+            console.error('[NativePlayer] Auto-download failed:', downloadErr.message);
+        }
+    }
+
     return 'yt-dlp';
 }
 
 // Helper: locate ffmpeg binary across environments
 function getFfmpegExecutable() {
-    const candidates = [
+    const isWin = process.platform === 'win32';
+    const candidates = isWin ? [
         path.join(__dirname, '..', 'ffmpeg.exe'),
         path.join(process.cwd(), 'ffmpeg.exe'),
         path.join(__dirname, '..', 'bin', 'ffmpeg.exe'),
         path.join(process.cwd(), 'bin', 'ffmpeg.exe')
+    ] : [
+        '/usr/bin/ffmpeg',
+        '/usr/local/bin/ffmpeg',
+        path.join(__dirname, '..', 'bin', 'ffmpeg'),
+        path.join(process.cwd(), 'bin', 'ffmpeg')
     ];
     for (const c of candidates) {
         if (fs.existsSync(c)) {
+            if (!isWin) {
+                try { fs.chmodSync(c, 0o755); } catch (e) {}
+            }
             return c;
         }
     }

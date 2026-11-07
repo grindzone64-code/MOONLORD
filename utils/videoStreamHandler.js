@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 
 class VideoStreamHandler {
     constructor(client, guildId, channelId) {
@@ -12,8 +13,13 @@ class VideoStreamHandler {
     async play(filePath) {
         console.log(`[VideoStream] Starting native stream for ${filePath} on bot ${this.client.user.id}`);
 
-        // Ensure the library finds our local ffmpeg.exe
-        process.env.FFMPEG_PATH = path.join(process.cwd(), 'ffmpeg.exe');
+        // Ensure the library finds ffmpeg across environments
+        const localFfmpeg = path.join(process.cwd(), process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+        if (fs.existsSync(localFfmpeg)) {
+            process.env.FFMPEG_PATH = localFfmpeg;
+        } else {
+            process.env.FFMPEG_PATH = 'ffmpeg';
+        }
 
         try {
             const channel = this.client.channels.cache.get(this.channelId);
