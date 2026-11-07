@@ -408,8 +408,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- API HANDLERS ---
-    const DEFAULT_CLOUD_HOST = 'https://moonlord-2.onrender.com';
-    const LIFETIME_FALLBACK_HOST = 'https://moonlord-2.onrender.com';
+    const DEFAULT_CLOUD_HOST = 'https://moonlord-3.onrender.com';
+    const LIFETIME_FALLBACK_HOST = 'https://moonlord-3.onrender.com';
     const isAndroidDevice = /Android/i.test(navigator.userAgent) || 
         (typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.host.includes('androidplatform.net')));
 
@@ -442,7 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return '/api';
         }
         if (window._activeDetectedHost) return window._activeDetectedHost + '/api';
-        return 'https://moonlord-2.onrender.com/api';
+        return 'https://moonlord-3.onrender.com/api';
     }
 
     function setBackendOnline(isOnline) {
@@ -531,6 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = storage ? storage.getItem('moonlord_api_host') : null;
         const candidates = [
             saved,
+            'https://moonlord-3.onrender.com',
             'https://moonlord-2.onrender.com',
             'https://moonlord.onrender.com',
             'http://192.168.1.3:5000',
