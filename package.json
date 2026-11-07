@@ -1,0 +1,82 @@
+{
+  "name": "shravan-self-bot-v4",
+  "version": "1.0.0",
+  "description": "**This Script Is For Educational Purposes Only. The Author Is _NOT_ Responsible For Any Loss And Is _NOT_ Promoting Any Illegal Activities Or Any Illegal Automation.**",
+  "main": "electron-main.js",
+  "bin": "launcher.js",
+  "scripts": {
+    "start": "node index.js",
+    "app": "electron .",
+    "icon": "node gen-icon.js",
+    "dist": "electron-builder --win portable",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "@snazzah/davey": "^0.2.0",
+    "adm-zip": "^0.6.1",
+    "app-info-parser": "^1.1.6",
+    "axios": "^1.10.0",
+    "body-parser": "^1.20.4",
+    "cors": "^2.8.6",
+    "debug": "^4.4.3",
+    "discord.js-selfbot-v13": "^3.7.1",
+    "express": "^4.22.1",
+    "ffmpeg-static": "^5.3.0",
+    "libsodium-wrappers": "^0.7.15",
+    "localtunnel": "^2.0.2",
+    "multer": "^2.0.2",
+    "opusscript": "^0.0.8",
+    "play-dl": "^1.9.7",
+    "prism-media": "^1.3.5",
+    "ws": "^8.19.0",
+    "yt-search": "^2.13.1"
+  },
+  "pkg": {
+    "assets": [
+      "obfuscated_source/**/*",
+      "node_modules/axios/**/*"
+    ],
+    "external": [
+      "node:sqlite"
+    ]
+  },
+  "build": {
+    "appId": "com.moonlord.controlunit",
+    "productName": "MOON LORD",
+    "asar": false,
+    "directories": {
+      "output": "dist_electron_build"
+    },
+    "files": [
+      "electron-main.js",
+      "index.js",
+      "launcher.js",
+      "bin/**/*",
+      "utils/**/*",
+      "config/**/*",
+      "public/**/*",
+      "build/icon.*",
+      "package.json",
+      "node_modules/**/*",
+      "!**/*.rar",
+      "!crash.log",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "MOON-LORD-${version}.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
+    "javascript-obfuscator": "^5.3.0"
+  }
+}

@@ -1,0 +1,50 @@
+# ===================================================
+#   Shravan Selfbot - COMPLETE Requirements File
+# ===================================================
+
+# --- [1] System Requirements ---
+# 1. Node.js (v16 or higher) - https://nodejs.org/
+# 2. Python (v3.8 or higher) - https://python.org/
+# 3. Java (JRE v11+) - Required for Lavalink.jar
+# 4. FFmpeg - (Requirement for audio processing)
+
+# --- [2] Node.js Dependencies ---
+# Install using: npm install
+# (These are listed in package.json)
+# - discord.js-selfbot-v13
+# - rainlink
+# - axios
+# - express
+# - multer
+# - cors
+# - ws
+# - body-parser
+# - debug
+# - prism-media
+# - yt-search
+
+# --- [3] Python Dependencies (Captcha & Automation) ---
+# Install using: pip install -r requirements.txt
+flask
+flask_cors
+requests
+playwright
+camoufox[async]
+
+# --- [4] Post-Installation Setup ---
+# 1. Install Playwright Browsers:
+#    python -m playwright install chromium
+
+# 2. Fetch Camoufox Browser Data:
+#    (Optional but recommended for stealth)
+#    camoufox fetch
+
+# 3. OpenRouter API Key:
+#    - Required for AI Solving.
+#    - Get it from: https://openrouter.ai/
+#    - Put it in: d:\Self bot fixed\hcap\config.json
+
+# --- [5] Project Startup ---
+# 1. Run 'run_lavalink.bat'
+# 2. Run 'run_hcap.bat' (Python Captcha Solver)
+# 3. Run 'Start_Selfbot.bat' (Main Node.js Script)

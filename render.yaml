@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: moon-lord-control-unit
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_VERSION
+        value: 18.20.0
+      - key: PORT
+        value: 10000
+

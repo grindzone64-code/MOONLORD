@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access // MOON LORD Control Unit</title>
+    <link rel="stylesheet" href="style.css?v=16">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ============ LOGIN — ignition screen ============ */
+
+        body.login-body {
+            overflow: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        /* Ambient light bloom behind the shell */
+        body.login-body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(60% 55% at 22% 30%, var(--accent-glow) 0%, transparent 60%),
+                radial-gradient(50% 50% at 82% 78%, rgba(231, 34, 46, 0.10) 0%, transparent 62%);
+            opacity: 0.9;
+            animation: bloomShift 14s ease-in-out infinite alternate;
+        }
+
+        @keyframes bloomShift {
+            from { transform: translate3d(-2%, -1%, 0) scale(1); }
+            to { transform: translate3d(2%, 1%, 0) scale(1.06); }
+        }
+
+        .ignition-shell {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            width: 900px;
+            max-width: 100%;
+            /* Liquid glass — the studio plate blurs straight through the shell */
+            background:
+                linear-gradient(135deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 26%, transparent 55%),
+                color-mix(in srgb, var(--surface) 55%, transparent);
+            -webkit-backdrop-filter: blur(34px) saturate(150%);
+            backdrop-filter: blur(34px) saturate(150%);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 22px;
+            overflow: hidden;
+            box-shadow:
+                0 50px 120px -30px rgba(0, 0, 0, 0.95),
+                inset 0 1px 0 rgba(255, 255, 255, 0.20),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+                0 0 90px -44px var(--accent-glow);
+            animation: shellRise 0.6s var(--ease);
+        }
+
+        @keyframes shellRise {
+            from { opacity: 0; transform: translateY(18px) scale(0.99); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* M stripe across the top edge */
+        .ignition-shell::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 148px;
+            height: 3px;
+            background: linear-gradient(90deg,
+                    var(--m-light) 0 33.33%,
+                    var(--m-blue) 33.33% 66.66%,
+                    var(--m-red) 66.66% 100%);
+            z-index: 2;
+            box-shadow: 0 0 18px -2px var(--accent-glow);
+        }
+
+        /* ---------------- Left: brand plate ---------------- */
+
+        .brand-plate {
+            position: relative;
+            /* Sits inside the shell's blur — a translucent tint is all it needs
+               to read as a distinct panel while the car shows through. */
+            background:
+                radial-gradient(120% 90% at 20% 0%, rgba(255, 255, 255, 0.06), transparent 55%),
+                color-mix(in srgb, var(--surface-2) 42%, transparent);
+            border-right: 1px solid rgba(255, 255, 255, 0.10);
+            padding: 38px 28px 26px;
+            display: flex;
+            flex-direction: column;
+            gap: 26px;
+        }
+
+        .brand-plate .sidebar-header {
+            padding: 0 0 24px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .plate-copy .block-label {
+            margin-bottom: 10px;
+        }
+
+        .plate-copy p {
+            font-size: 0.82rem;
+            line-height: 1.7;
+            color: var(--text-3);
+        }
+
+        .plate-specs {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .plate-specs .telemetry-cell {
+            background: color-mix(in srgb, var(--bg-deep) 40%, transparent);
+            padding: 13px 15px;
+        }
+
+        .brand-plate .sidebar-footer {
+            margin-top: auto;
+            padding: 16px 0 0;
+        }
+
+        .brand-plate .build-stamp {
+            margin-top: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.58rem;
+            font-weight: 500;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--text-3);
+            text-align: center;
+        }
+
+        /* ---------------- Right: credential panel ---------------- */
+
+        .access-panel {
+            position: relative;
+            padding: 46px 50px 44px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Pointer specular — the sign-in panel catches the light as the cursor
+           moves across it. --mx/--my are written by the inline module below;
+           z-index:-1 keeps the glow behind the form fields. */
+        .access-panel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            background: radial-gradient(320px circle at var(--mx, 70%) var(--my, 0%),
+                    rgba(255, 255, 255, 0.10) 0%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.35s var(--ease);
+        }
+
+        .access-panel:hover::before {
+            opacity: 1;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .access-panel::before { display: none; }
+        }
+
+        .access-panel .kicker {
+            display: block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.62rem;
+            font-weight: 600;
+            letter-spacing: 0.26em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 9px;
+        }
+
+        .access-panel h1 {
+            font-size: 1.9rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.08;
+            color: var(--text);
+        }
+
+        .access-panel .small {
+            display: block;
+            margin-top: 8px;
+            margin-bottom: 30px;
+            font-size: 0.83rem;
+            color: var(--text-3);
+        }
+
+        .field-wrapper {
+            position: relative;
+        }
+
+        .field-wrapper > i.field-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.82rem;
+            color: var(--text-3);
+            pointer-events: none;
+            transition: color var(--t);
+        }
+
+        .field-wrapper input {
+            padding-left: 40px;
+            height: 46px;
+        }
+
+        .field-wrapper input:focus ~ i.field-icon {
+            color: var(--accent);
+        }
+
+        .reveal-btn {
+            position: absolute;
+            right: 7px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            border-radius: var(--radius);
+            color: var(--text-3);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: color var(--t), background var(--t);
+        }
+
+        .reveal-btn:hover {
+            color: var(--text);
+            background: var(--surface-3);
+        }
+
+        .error-msg {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 15px;
+            margin-bottom: 20px;
+            background: rgba(231, 34, 46, 0.09);
+            border: 1px solid rgba(231, 34, 46, 0.4);
+            border-left: 3px solid var(--alert);
+            border-radius: var(--radius);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            color: #FF6A73;
+        }
+
+        .error-msg.show {
+            display: flex;
+            animation: errShake 0.4s var(--ease);
+        }
+
+        @keyframes errShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .access-actions {
+            margin-top: 28px;
+        }
+
+        .auth-nav {
+            display: flex;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 20px;
+        }
+
+        .auth-tab-btn {
+            flex: 1;
+            padding: 9px 8px;
+            background: transparent;
+            border: none;
+            border-radius: 7px;
+            color: var(--text-3);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            transition: all var(--t);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .auth-tab-btn.active {
+            background: rgba(255, 255, 255, 0.12);
+            color: #FFF;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        .hwid-badge {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            margin-bottom: 18px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: var(--radius);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-3);
+        }
+
+        .hwid-copy-btn {
+            background: transparent;
+            border: none;
+            color: var(--accent);
+            cursor: pointer;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+        }
+
+        .hwid-copy-btn:hover {
+            color: #FFF;
+        }
+
+        .remember-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 14px;
+            font-size: 0.75rem;
+            color: var(--text-3);
+        }
+
+        .auth-tab-content {
+            display: none;
+        }
+
+        .auth-tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .btn-block {
+            width: 100%;
+            height: 50px;
+            font-size: 0.8rem;
+        }
+
+        .login-loader {
+            display: none;
+            width: 15px;
+            height: 15px;
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        .btn.is-busy .login-loader {
+            display: block;
+        }
+
+        .btn.is-busy .btn-label {
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .access-foot {
+            margin-top: 22px;
+            padding-top: 18px;
+            border-top: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.58rem;
+            font-weight: 500;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--text-3);
+        }
+
+        @media (max-width: 760px) {
+            .ignition-shell {
+                grid-template-columns: 1fr;
+            }
+
+            .brand-plate {
+                border-right: none;
+                border-bottom: 1px solid var(--line);
+                padding: 28px 26px 22px;
+            }
+
+            .plate-specs,
+            .brand-plate .sidebar-footer {
+                display: none;
+            }
+
+            .access-panel {
+                padding: 34px 26px 34px;
+            }
+        }
+    </style>
+</head>
+
+<body class="login-body">
+    <div class="ignition-shell">
+
+        <!-- ------------------- Brand plate ------------------- -->
+        <aside class="brand-plate">
+            <div class="sidebar-header">
+                <div class="roundel"></div>
+                <div class="brand-text">
+                    <span class="title">MOON LORD</span>
+                    <span class="subtitle">Control Unit</span>
+                </div>
+            </div>
+
+            <div class="plate-copy">
+                <div class="block-label">Authorisation</div>
+                <p>Operator credentials required before ignition. The control unit stays locked until the gateway verifies your account.</p>
+            </div>
+
+            <div class="plate-specs">
+                <div class="telemetry-cell">
+                    <span class="t-label">Gateway</span>
+                    <span class="t-value"><i class="fas fa-signal"></i> Standing By</span>
+                </div>
+                <div class="telemetry-cell">
+                    <span class="t-label">Session</span>
+                    <span class="t-value"><i class="fas fa-lock"></i> Not Authorised</span>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="dot"></span>
+                    <span>Awaiting Operator</span>
+                </div>
+                <div class="build-stamp">Built by MOON LORD</div>
+            </div>
+        </aside>
+
+        <!-- ------------------- Access panel ------------------- -->
+        <main class="access-panel">
+            <span class="kicker">Security / KeyAuth</span>
+            <h1>Access Verification</h1>
+            <span class="small" id="access-subtext">Enter your KeyAuth license key or operator credentials to unlock MOON LORD</span>
+
+            <div class="auth-nav">
+                <button type="button" class="auth-tab-btn active" data-tab="tab-license">
+                    <i class="fas fa-key"></i> License
+                </button>
+                <button type="button" class="auth-tab-btn" data-tab="tab-ka-user">
+                    <i class="fas fa-user-shield"></i> User
+                </button>
+                <button type="button" class="auth-tab-btn" data-tab="tab-operator">
+                    <i class="fas fa-terminal"></i> Operator
+                </button>
+            </div>
+
+            <div class="hwid-badge">
+                <span><i class="fas fa-fingerprint"></i> HWID: <span id="hwid-val">Generating...</span></span>
+                <button type="button" class="hwid-copy-btn" id="copy-hwid-btn" title="Copy HWID">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+            </div>
+
+            <div id="error" class="error-msg">
+                <i class="fas fa-triangle-exclamation"></i>
+                <span id="error-text">Invalid credentials</span>
+            </div>
+
+            <!-- Tab 1: License Key -->
+            <div id="tab-license" class="auth-tab-content active">
+                <form id="license-form">
+                    <div class="input-group">
+                        <label for="license-key">License Key</label>
+                        <div class="field-wrapper">
+                            <input type="text" id="license-key" placeholder="XXXXXX-XXXXXX-XXXXXX"
+                                   autocomplete="off" spellcheck="false" autofocus>
+                            <i class="fas fa-key field-icon"></i>
+                        </div>
+                    </div>
+                    <div class="remember-row">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="checkbox" id="remember-license" checked>
+                            <span>Remember Key</span>
+                        </label>
+                        <span id="sub-info" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:0.68rem;"></span>
+                    </div>
+                    <div class="access-actions">
+                        <button type="submit" id="license-btn" class="btn btn-primary btn-block">
+                            <span class="btn-label"><i class="fas fa-unlock"></i> Activate License</span>
+                            <div class="login-loader"></div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tab 2: KeyAuth User Account -->
+            <div id="tab-ka-user" class="auth-tab-content">
+                <form id="ka-user-form">
+                    <div class="input-group">
+                        <label for="ka-username">KeyAuth Username</label>
+                        <div class="field-wrapper">
+                            <input type="text" id="ka-username" placeholder="Username" spellcheck="false">
+                            <i class="fas fa-user field-icon"></i>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="ka-password">KeyAuth Password</label>
+                        <div class="field-wrapper">
+                            <input type="password" id="ka-password" placeholder="••••••••">
+                            <i class="fas fa-lock field-icon"></i>
+                        </div>
+                    </div>
+                    <div class="remember-row">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="checkbox" id="remember-ka-user" checked>
+                            <span>Remember Me</span>
+                        </label>
+                    </div>
+                    <div class="access-actions">
+                        <button type="submit" id="ka-login-btn" class="btn btn-primary btn-block">
+                            <span class="btn-label"><i class="fas fa-sign-in-alt"></i> KeyAuth Login</span>
+                            <div class="login-loader"></div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tab 3: Operator Pass -->
+            <div id="tab-operator" class="auth-tab-content">
+                <form id="login-form" autocomplete="on">
+                    <div class="input-group">
+                        <label for="username">Operator Username</label>
+                        <div class="field-wrapper">
+                            <input type="text" id="username" name="username" placeholder="operator"
+                                   autocomplete="username" spellcheck="false">
+                            <i class="fas fa-user field-icon"></i>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="password">Password</label>
+                        <div class="field-wrapper">
+                            <input type="password" id="password" name="password" placeholder="••••••••"
+                                   autocomplete="current-password">
+                            <i class="fas fa-lock field-icon"></i>
+                            <button type="button" class="reveal-btn" id="reveal-btn" title="Show password"
+                                    aria-label="Show password">
+                                <i class="fas fa-eye" id="reveal-icon"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="access-actions">
+                        <button type="submit" id="login-btn" class="btn btn-primary btn-block">
+                            <span class="btn-label"><i class="fas fa-power-off"></i> Ignition</span>
+                            <div class="login-loader"></div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="access-foot">
+                <span>Secure Channel</span>
+                <span id="foot-state">Idle</span>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Pointer specular
+        (() => {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            const panel = document.querySelector('.access-panel');
+            if (!panel) return;
+            let queued = false, lastX = 0, lastY = 0;
+            panel.addEventListener('pointermove', (e) => {
+                const r = panel.getBoundingClientRect();
+                lastX = ((e.clientX - r.left) / r.width) * 100;
+                lastY = ((e.clientY - r.top) / r.height) * 100;
+                if (!queued) {
+                    queued = true;
+                    requestAnimationFrame(() => {
+                        panel.style.setProperty('--mx', lastX.toFixed(1) + '%');
+                        panel.style.setProperty('--my', lastY.toFixed(1) + '%');
+                        queued = false;
+                    });
+                }
+            }, { passive: true });
+            panel.addEventListener('pointerleave', () => {
+                panel.style.removeProperty('--mx');
+                panel.style.removeProperty('--my');
+            }, { passive: true });
+        })();
+
+        // Match dashboard theme
+        const savedTheme = localStorage.getItem('shravan-bot-theme');
+        if (savedTheme && savedTheme !== 'default') {
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+
+        // HWID Generation
+        function getHWID() {
+            let hwid = localStorage.getItem('moonlord_hwid');
+            if (!hwid) {
+                const nav = (navigator.userAgent || '') + (navigator.hardwareConcurrency || '') + (screen.width + 'x' + screen.height);
+                let hash = 0;
+                for (let i = 0; i < nav.length; i++) {
+                    hash = ((hash << 5) - hash) + nav.charCodeAt(i);
+                    hash |= 0;
+                }
+                const r1 = Math.random().toString(36).substring(2, 8).toUpperCase();
+                const r2 = Math.random().toString(36).substring(2, 8).toUpperCase();
+                hwid = 'ML-' + Math.abs(hash).toString(16).toUpperCase() + '-' + r1 + '-' + r2;
+                localStorage.setItem('moonlord_hwid', hwid);
+            }
+            return hwid;
+        }
+
+        const deviceHWID = getHWID();
+        const hwidEl = document.getElementById('hwid-val');
+        if (hwidEl) hwidEl.innerText = deviceHWID.slice(0, 16) + '...';
+        document.getElementById('copy-hwid-btn').onclick = () => {
+            navigator.clipboard.writeText(deviceHWID).then(() => {
+                alert('Hardware ID copied to clipboard: ' + deviceHWID);
+            }).catch(() => {
+                alert('HWID: ' + deviceHWID);
+            });
+        };
+
+        // Tab Switching
+        const tabBtns = document.querySelectorAll('.auth-tab-btn');
+        const tabContents = document.querySelectorAll('.auth-tab-content');
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                const targetId = btn.getAttribute('data-tab');
+                const targetContent = document.getElementById(targetId);
+                if (targetContent) targetContent.classList.add('active');
+                errorDiv.classList.remove('show');
+            });
+        });
+
+        const errorDiv = document.getElementById('error');
+        const errorText = document.getElementById('error-text');
+        const footState = document.getElementById('foot-state');
+
+        function showError(msg) {
+            errorText.innerText = msg;
+            errorDiv.classList.remove('show');
+            void errorDiv.offsetWidth;
+            errorDiv.classList.add('show');
+            footState.innerText = 'Rejected';
+        }
+
+        function formatExpiry(timestamp) {
+            const num = Number(timestamp);
+            if (!num || isNaN(num) || num > 20000000000) return 'Lifetime Access';
+            const expDate = new Date(num * 1000);
+            return expDate.toLocaleDateString() + ' ' + expDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // 1. License Key Authentication
+        const licenseForm = document.getElementById('license-form');
+        const licenseInput = document.getElementById('license-key');
+        const licenseBtn = document.getElementById('license-btn');
+        const rememberLicense = document.getElementById('remember-license');
+
+        licenseForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const key = licenseInput.value.trim();
+            if (!key) {
+                showError('License key required');
+                licenseInput.focus();
+                return;
+            }
+
+            errorDiv.classList.remove('show');
+            licenseBtn.disabled = true;
+            licenseBtn.classList.add('is-busy');
+            footState.innerText = 'Validating Key…';
+
+            try {
+                const res = await fetch('/api/keyauth/license', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, hwid: deviceHWID })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    footState.innerText = 'Authorised';
+                    if (rememberLicense.checked) {
+                        localStorage.setItem('moonlord_license_key', key);
+                    } else {
+                        localStorage.removeItem('moonlord_license_key');
+                    }
+                    const sub = data.info?.subscriptions?.[0] || {};
+                    const expStr = formatExpiry(sub.expiry);
+                    sessionStorage.setItem('moonlord_auth', 'true');
+                    sessionStorage.setItem('moonlord_sub', sub.subscription || 'Premium');
+                    sessionStorage.setItem('moonlord_exp', expStr);
+
+                    window.location.href = '/';
+                    return;
+                }
+                showError(data.message || 'Invalid or expired license key');
+            } catch (err) {
+                showError('KeyAuth validation error');
+            } finally {
+                licenseBtn.disabled = false;
+                licenseBtn.classList.remove('is-busy');
+            }
+        };
+
+        // 2. KeyAuth User Login
+        const kaForm = document.getElementById('ka-user-form');
+        const kaUser = document.getElementById('ka-username');
+        const kaPass = document.getElementById('ka-password');
+        const kaBtn = document.getElementById('ka-login-btn');
+        const rememberUser = document.getElementById('remember-ka-user');
+
+        kaForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const username = kaUser.value.trim();
+            const password = kaPass.value;
+            if (!username || !password) {
+                showError('Username and password required');
+                return;
+            }
+
+            errorDiv.classList.remove('show');
+            kaBtn.disabled = true;
+            kaBtn.classList.add('is-busy');
+            footState.innerText = 'Authenticating…';
+
+            try {
+                const res = await fetch('/api/keyauth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, hwid: deviceHWID })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    footState.innerText = 'Authorised';
+                    if (rememberUser.checked) {
+                        localStorage.setItem('moonlord_ka_user', username);
+                    }
+                    sessionStorage.setItem('moonlord_auth', 'true');
+                    window.location.href = '/';
+                    return;
+                }
+                showError(data.message || 'KeyAuth authentication failed');
+            } catch (err) {
+                showError('KeyAuth server unreachable');
+            } finally {
+                kaBtn.disabled = false;
+                kaBtn.classList.remove('is-busy');
+            }
+        };
+
+        // 3. Operator Local Login
+        const form = document.getElementById('login-form');
+        const loginBtn = document.getElementById('login-btn');
+        const userInput = document.getElementById('username');
+        const passInput = document.getElementById('password');
+        const revealBtn = document.getElementById('reveal-btn');
+        const revealIcon = document.getElementById('reveal-icon');
+
+        revealBtn.onclick = () => {
+            const shown = passInput.type === 'text';
+            passInput.type = shown ? 'password' : 'text';
+            revealIcon.className = shown ? 'fas fa-eye' : 'fas fa-eye-slash';
+            passInput.focus();
+        };
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const user = userInput.value.trim();
+            const pass = passInput.value;
+            if (!user || !pass) {
+                showError('Operator credentials required');
+                return;
+            }
+
+            errorDiv.classList.remove('show');
+            loginBtn.disabled = true;
+            loginBtn.classList.add('is-busy');
+            footState.innerText = 'Verifying…';
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user, pass })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success' || data.success) {
+                    footState.innerText = 'Authorised';
+                    window.location.href = '/';
+                    return;
+                }
+                showError(data.message || 'Invalid credentials');
+            } catch (err) {
+                showError('Gateway unreachable');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.classList.remove('is-busy');
+            }
+        };
+
+        // Auto-fill saved credentials
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedKey = localStorage.getItem('moonlord_license_key');
+            if (savedKey) {
+                licenseInput.value = savedKey;
+            }
+            const savedKaUser = localStorage.getItem('moonlord_ka_user');
+            if (savedKaUser) {
+                kaUser.value = savedKaUser;
+            }
+        });
+    </script>
+</body>
+
+</html>

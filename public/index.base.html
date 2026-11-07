@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOON LORD // Control Unit</title>
+    <link rel="stylesheet" href="style.css?v=16">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Jumps past the sidebar's ~20 nav items, which a keyboard user would
+         otherwise tab through on every single page load. Hidden until focused. -->
+    <a class="skip-link" href="#main-content">Skip to content</a>
+
+    <!-- Toast rail. aria-live="polite" so a screen reader announces the result
+         of a command — without it, toasts are the only feedback most actions
+         give and they are announced to nobody. Polite rather than assertive:
+         these are confirmations, and interrupting mid-sentence for "Skipped
+         current song" is worse than waiting for a pause. -->
+    <div id="toast-container" role="status" aria-live="polite" aria-atomic="false"></div>
+
+    <!-- Command palette (Ctrl + K) -->
+    <div id="command-palette-modal" class="modal-overlay" role="dialog" aria-modal="true"
+         aria-label="Command palette" aria-hidden="true">
+        <div class="command-palette-card">
+            <div class="palette-input-wrapper">
+                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="text" id="palette-search-input" placeholder="Search commands — start, voice, spammer…"
+                       autofocus autocomplete="off" spellcheck="false"
+                       role="combobox" aria-expanded="true" aria-controls="palette-results-list"
+                       aria-autocomplete="list" aria-label="Search commands">
+                <span class="palette-hint">ESC</span>
+            </div>
+            <div class="palette-results" id="palette-results-list" role="listbox" aria-label="Commands"></div>
+        </div>
+    </div>
+
+    <!-- Theme picker (car-brand liveries) -->
+    <div id="theme-picker-modal" class="modal-overlay" role="dialog" aria-modal="true"
+         aria-labelledby="theme-picker-title" aria-hidden="true">
+        <div class="theme-picker-card">
+            <div class="theme-picker-header">
+                <div>
+                    <span class="kicker">Cockpit / Paint Shop</span>
+                    <h2 id="theme-picker-title">Select Livery</h2>
+                </div>
+                <span class="palette-hint">ESC</span>
+            </div>
+            <div class="theme-grid" id="theme-grid"></div>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- ============================ SIDEBAR ============================ -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="roundel"></div>
+                <div class="brand-text">
+                    <span class="title">MOON LORD</span>
+                    <span class="subtitle">M Control Unit</span>
+                </div>
+            </div>
+
+            <ul class="nav-links">
+                <li class="nav-group-label">Cockpit</li>
+                <li class="active" data-tab="dashboard">
+                    <i class="fas fa-gauge-high" aria-hidden="true"></i>
+                    <span>Dashboard</span>
+                </li>
+                <li data-tab="token-selection">
+                    <i class="fas fa-list-check" aria-hidden="true"></i>
+                    <span>Fleet Selection</span>
+                </li>
+
+                <li class="nav-group-label">Drivetrain</li>
+                <li data-tab="voice-controls">
+                    <i class="fas fa-headset" aria-hidden="true"></i>
+                    <span>Voice &amp; Audio</span>
+                </li>
+                <li data-tab="music">
+                    <i class="fas fa-compact-disc" aria-hidden="true"></i>
+                    <span>Media Player</span>
+                </li>
+
+                <li class="nav-group-label">Operations</li>
+                <li data-tab="token-manager">
+                    <i class="fas fa-id-card" aria-hidden="true"></i>
+                    <span>Token Manager</span>
+                </li>
+                <li data-tab="spammer">
+                    <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                    <span>Messaging</span>
+                </li>
+                <li data-tab="reactions">
+                    <i class="fas fa-bolt" aria-hidden="true"></i>
+                    <span>Mass Reaction</span>
+                </li>
+                <li data-tab="tokens">
+                    <i class="fas fa-key" aria-hidden="true"></i>
+                    <span>Token Diagnostics</span>
+                </li>
+
+                <li class="nav-group-label">System</li>
+                <li data-tab="settings">
+                    <i class="fas fa-sliders" aria-hidden="true"></i>
+                    <span>Presence &amp; RPC</span>
+                </li>
+                <li data-tab="terminal">
+                    <i class="fas fa-terminal" aria-hidden="true"></i>
+                    <span>Live Console</span>
+                </li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="dot pulse"></span>
+                    <span id="global-status">System Active</span>
+                </div>
+                <div class="build-stamp">Built by MOON LORD</div>
+            </div>
+        </nav>
+
+        <!-- ============================ CONTENT ============================ -->
+        <main class="content" id="main-content" tabindex="-1">
+
+            <!-- ------------------------- DASHBOARD ------------------------- -->
+            <section id="dashboard" class="tab-content active">
+                <header class="tab-header">
+                    <div>
+                        <span class="kicker">Cockpit / Overview</span>
+                        <h1>Instrument Cluster</h1>
+                        <span class="small">Live fleet telemetry and master ignition controls</span>
+                    </div>
+                    <div class="header-actions">
+                        <button id="open-cmd-palette-btn" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-terminal" aria-hidden="true"></i> Commands <kbd>Ctrl K</kbd>
+                        </button>
+                        <button id="theme-toggle" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-palette" aria-hidden="true"></i> Livery
+                        </button>
+                        <button id="force-disconnect" class="btn btn-danger btn-sm">
+                            <i class="fas fa-power-off" aria-hidden="true"></i> Kill Voice
+                        </button>
+                    </div>
+                </header>
+
+                <div class="section-body">
+                    <div class="stats-grid">
+                        <div class="stat-card" data-open-tab="token-selection" title="Open Fleet Selection">
+                            <div class="gauge">
+                                <div class="gauge-face">
+                                    <p id="stat-total">0</p>
+                                    <span class="gauge-unit">Units</span>
+                                </div>
+                            </div>
+                            <h3>Total Loaded</h3>
+                        </div>
+                        <div class="stat-card" data-open-tab="settings" title="Open Presence &amp; RPC">
+                            <div class="gauge">
+                                <div class="gauge-face">
+                                    <p id="stat-online">0</p>
+                                    <span class="gauge-unit">Online</span>
+                                </div>
+                            </div>
+                            <h3>Active Bots</h3>
+                        </div>
+                        <div class="stat-card" data-open-tab="voice-controls" title="Open Voice &amp; Audio">
+                            <div class="gauge">
+                                <div class="gauge-face">
+                                    <p id="stat-guilds">0</p>
+                                    <span class="gauge-unit">Guilds</span>
+                                </div>
+                            </div>
+                            <h3>Connected Servers</h3>
+                        </div>
+                    </div>
+
+                    <div class="telemetry-strip">
+                        <div class="telemetry-cell">
+                            <span class="t-label">Link</span>
+                            <span class="t-value"><i class="fas fa-signal" aria-hidden="true"></i> Gateway Stable</span>
+                        </div>
+                        <div class="telemetry-cell">
+                            <span class="t-label">Poll Rate</span>
+                            <span class="t-value"><i class="fas fa-stopwatch" aria-hidden="true"></i> 3.0 s</span>
+                        </div>
+                        <div class="telemetry-cell">
+                            <span class="t-label">Audio Engine</span>
+                            <span class="t-value"><i class="fas fa-waveform-lines" aria-hidden="true"></i> Native YT Engine</span>
+                        </div>
+                        <div class="telemetry-cell">
+                            <span class="t-label">Mode</span>
+                            <span class="t-value"><i class="fas fa-flag-checkered" aria-hidden="true"></i> Manual</span>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-power-off" aria-hidden="true"></i> Ignition</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="ignition-console">
+                                <button id="start-all" class="btn btn-success btn-hero" data-sub="ALL UNITS">
+                                    <i class="fas fa-play" aria-hidden="true"></i> Start Engine
+                                </button>
+                                <button id="stop-all" class="btn btn-danger btn-hero" data-sub="ALL UNITS">
+                                    <i class="fas fa-stop" aria-hidden="true"></i> Cut Ignition
+                                </button>
+                                <button id="refresh-stats" class="btn btn-secondary btn-hero" data-sub="TELEMETRY">
+                                    <i class="fas fa-rotate" aria-hidden="true"></i> Resync
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------------------- FLEET SELECTION ---------------------- -->
+            <section id="token-selection" class="tab-content">
+                <header class="tab-header">
+                    <div>
+                        <span class="kicker">Cockpit / Fleet</span>
+                        <h1>Fleet Selection</h1>
+                        <span class="small">Target specific units for voice, messaging and command dispatch</span>
+                    </div>
+                </header>
+
+                <div class="section-body">
+                    <div id="global-token-selector-wrapper">
+                        <div class="card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-list-check" aria-hidden="true"></i> Active Units</h2>
+                                <div class="counter-chip">
+                                    <span id="selected-tokens-count">0</span>
+                                    <span>Selected</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="controls" style="margin-bottom: 20px; align-items: center;">
+                                    <button id="select-all-tokens-btn" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-check-double" aria-hidden="true"></i> Select All
+                                    </button>
+                                    <button id="clear-selected-tokens-btn" class="btn btn-secondary btn-sm">
+                                        <i class="fas fa-eraser" aria-hidden="true"></i> Clear
+                                    </button>
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+                                        <input type="number" id="random-count-input" value="5" min="1"
+                                               aria-label="How many units to pick at random"
+                                               style="width: 80px; text-align: center;">
+                                        <button id="select-random-tokens-btn" class="btn btn-warning btn-sm">
+                                            <i class="fas fa-dice" aria-hidden="true"></i> Random
+                                        </button>
+                                        <button id="select-first-n-btn" class="btn btn-info btn-sm">
+                                            <i class="fas fa-arrow-down-short-wide" aria-hidden="true"></i> First N
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="global-tokens-container">
+                                    <div class="empty-state" style="grid-column: 1 / -1;">Loading fleet…</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ------------------------ VOICE & AUDIO ------------------------ -->
+            <section id="voice-controls" class="tab-content">
+                <header class="tab-header">
+                    <div>
+                        <span class="kicker">Drivetrain / Voice</span>
+                        <h1>Voice &amp; Audio</h1>
+                        <span class="small">Channel connections, local media streaming and speech synthesis</span>
+                    </div>
+                </header>
+
+                <div class="section-body">
+                    <div class="card-grid">
+                        <!-- VC connection -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-headset" aria-hidden="true"></i> Channel Link</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="input-group">
+                                    <label for="voice-channel-id">Voice Channel ID</label>
+                                    <input type="text" id="voice-channel-id" placeholder="000000000000000000">
+                                </div>
+
+                                <div class="controls mt-10">
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="join-deafen">
+                                        <span class="checkmark"></span>
+                                        Deafen
+                                    </label>
+                                    <label class="checkbox-container">
+                                        <input type="checkbox" id="join-mute">
+                                        <span class="checkmark"></span>
+                                        Mute
+                                    </label>
+                                </div>
+
+                                <div class="controls mt-15">
+                                    <button id="join-owner" class="btn btn-primary">
+                                        <i class="fas fa-user-shield" aria-hidden="true"></i> Join Owner
+                                    </button>
+                                    <button id="join-id" class="btn btn-success">
+                                        <i class="fas fa-hashtag" aria-hidden="true"></i> Join by ID
+                                    </button>
+                                    <button id="follow-owner" class="btn btn-secondary">
+                                        <i class="fas fa-person-walking" aria-hidden="true"></i> Follow Owner
+                                    </button>
+                                    <button id="leave-vc" class="btn btn-danger">
+                                        <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i> Leave
+                                    </button>
+                                    <button id="fix-playback" class="btn btn-warning">
+                                        <i class="fas fa-wrench" aria-hidden="true"></i> Fix Playback
+                                    </button>
+                                </div>
+
+                                <div class="divider"></div>
+
+                                <div class="block-label">Drive Mode</div>
+                                <div class="join-speed-selector" id="vc-speed-selector">
+                                    <div class="speed-option" data-speed="fast">Sport — Instant</div>
+                                    <div class="speed-option active" data-speed="safe">Comfort — Safe</div>
+                                </div>
+
+                                <div class="divider"></div>
+
+                                <div class="input-group">
+                                    <label for="vc-guild-id">Target Server (Guild ID)</label>
+                                    <div style="display: flex; gap: 8px;">
+                                        <input type="text" id="vc-guild-id" placeholder="Optional guild ID">
+                                        <button id="refresh-vc-list" class="btn btn-secondary">
+                                            <i class="fas fa-rotate" aria-hidden="true"></i> Scan
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="block-label">Detected Channels</div>
+                                <div id="vc-list-container">
+                                    <div class="empty-state">Enter a guild ID and scan</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Audio -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-file-audio" aria-hidden="true"></i> Audio Deck</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="input-group">
+                                    <label for="audio-upload-input">Upload Audio</label>
+                                    <div class="btn-group">
+                                        <input type="file" id="audio-upload-input" accept="audio/*" style="display: none;">
+                                        <button id="browse-audio-btn" class="btn btn-secondary">
+                                            <i class="fas fa-folder-open" aria-hidden="true"></i> Browse
+                                        </button>
+                                        <button id="upload-audio-btn" class="btn btn-primary">
+                                            <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i> Upload
+                                        </button>
+                                    </div>
+                                    <span id="selected-file-name" class="small mt-5" style="display: block; color: var(--text-3);">No file selected</span>
+                                </div>
+
+                                <div class="input-group">
+                                    <label for="audio-file-list">Track</label>
+                                    <select id="audio-file-list">
+                                        <option value="">Loading audio…</option>
+                                    </select>
+                                </div>
+
+                                <div class="controls">
+                                    <button id="play-custom-audio" class="btn btn-success">
+                                        <i class="fas fa-play" aria-hidden="true"></i> Play
+                                    </button>
+                                    <button id="stop-custom-audio" class="btn btn-danger">
+                                        <i class="fas fa-stop" aria-hidden="true"></i> Stop
+                                    </button>
+                                </div>
+
+                                <div class="divider"></div>
+
+                                <div class="input-group">
+                                    <label for="custom-audio-volume">Output Level</label>
+                                    <div class="profile-input-grid">
+                                        <input type="number" id="custom-audio-volume" value="100" min="10" max="10000">
+                                        <button id="set-custom-audio-volume" class="btn btn-secondary">Apply</button>
+                                    </div>
+                                </div>
+
+                                <div class="block-label">DSP Presets</div>
+                                <div class="controls">
+                                    <button class="btn btn-sm btn-secondary custom-audio-filter-btn" data-filter="bassboost">Bass</button>
+                                    <button class="btn btn-sm btn-secondary custom-audio-filter-btn" data-filter="nightcore">Nightcore</button>
+                                    <button class="btn btn-sm btn-secondary custom-audio-filter-btn" data-filter="vaporwave">Vaporwave</button>
+                                    <button class="btn btn-sm btn-info custom-audio-filter-btn" data-filter="clearhigh">Clarity</button>
+                                    <button class="btn btn-sm btn-danger custom-audio-filter-btn" data-filter="clear">Reset</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Video -->
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <h2><i class="fas fa-video" aria-hidden="true"></i> Video Deck</h2>
+                                    <span class="small">Stream local video in camera mode</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="input-group">
+                                    <label for="video-upload-input">Upload Video</label>
+                                    <div class="btn-group">
+                                        <input type="file" id="video-upload-input" accept="video/*" style="display: none;">
+                                        <button id="browse-video-btn" class="btn btn-secondary">
+                                            <i class="fas fa-folder-open" aria-hidden="true"></i> Browse
+                                        </button>
+                                        <button id="upload-video-btn" class="btn btn-primary">
+                                            <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i> Upload
+                                        </button>
+                                    </div>
+                                    <span id="selected-video-name" class="small mt-5" style="display: block; color: var(--text-3);">No file selected</span>
+                                </div>
+
+                                <div class="input-group">
+                                    <label for="video-file-list">Clip</label>
+                                    <select id="video-file-list">
+                                        <option value="">Loading video…</option>
+                                    </select>
+                                </div>
+
+                                <div class="controls">
+                                    <button id="play-custom-video" class="btn btn-success">
+                                        <i class="fas fa-play" aria-hidden="true"></i> Stream
+                                    </button>
+                                    <button id="stop-custom-video" class="btn btn-danger">
+                                        <i class="fas fa-stop" aria-hidden="true"></i> Stop
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TTS -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-microphone-lines" aria-hidden="true"></i> Speech Synthesis</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="input-group">
+                                    <label for="tts-content">Broadcast Text</label>
+                                    <textarea id="tts-content" rows="3" placeholder="Message to speak across voice channels…"></textarea>
+                                </div>
+                                <button id="send-tts" class="btn btn-primary btn-block">
+                                    <i class="fas fa-tower-broadcast" aria-hidden="true"></i> Broadcast
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ------------------------ MEDIA PLAYER ------------------------ -->
+            <section id="music" class="tab-content">
+                <header class="tab-header">
+                    <div>
+                        <span class="kicker">Drivetrain / Media</span>
+                        <h1>Media Player</h1>
+                        <span class="small">YouTube, Spotify, SoundCloud and direct sources via Native High-Fidelity Audio Engine</span>
+                    </div>
+                </header>
+
+                <div class="section-body">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-compact-disc" aria-hidden="true"></i> Transport</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="input-group">
+                                <label for="music-query">Search Query or URL</label>
+                                <input type="text" id="music-query" placeholder="Track title or link">
+                            </div>
+
+                            <div class="controls">
+                                <button id="play-music" class="btn btn-primary"><i class="fas fa-play" aria-hidden="true"></i> Play</button>
+                                <button id="pause-music" class="btn btn-secondary"><i class="fas fa-pause" aria-hidden="true"></i> Pause</button>
+                                <button id="stop-music" class="btn btn-danger"><i class="fas fa-stop" aria-hidden="true"></i> Stop</button>
+                                <button id="skip-music" class="btn btn-warning"><i class="fas fa-forward-step" aria-hidden="true"></i> Skip</button>
+                                <button id="loop-music" class="btn btn-secondary" data-loop="false"><i class="fas fa-rotate-right" aria-hidden="true"></i> Loop: Off</button>
+                                <button id="seek-back" class="btn btn-info"><i class="fas fa-backward" aria-hidden="true"></i> −10s</button>
+                                <button id="seek-forward" class="btn btn-info"><i class="fas fa-forward" aria-hidden="true"></i> +10s</button>
+                                <button id="sync-music" class="btn btn-success" title="Put every selected unit on the same track, at the same instant, at the same level"><i class="fas fa-arrows-rotate" aria-hidden="true"></i> Sync</button>
+                            </div>
+
+                            <div class="sync-hint">
+                                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                                <span>Sync locks all selected tokens onto one track, one position and one loudness. Aligned copies sum cleanly instead of smearing.</span>
+                            </div>
+
+                            <div class="input-group mt-20" id="timeline-container" style="display: none;">
+                                <div class="timeline-times">
+                                    <span id="time-current">0:00</span>
+                                    <span id="time-total">0:00</span>
+                                </div>
+                                <input type="range" id="music-timeline" min="0" max="100" value="0"
+                                       aria-label="Seek position">
+                                <div id="now-playing-text"></div>
+                            </div>
+
+                            <div class="divider"></div>
+
+                            <div class="deck" id="deck">
+                                <div class="deck-head">
+                                    <div class="deck-brand">
+                                        <span class="deck-brand-mark"><i class="fas fa-sliders" aria-hidden="true"></i></span>
+                                        <span class="deck-brand-text">
+                                            <span class="deck-brand-main">Amplifier Deck</span>
+                                            <span class="deck-brand-sub">Loudness &middot; presets &middot; fleet coherence</span>
+                                        </span>
+                                    </div>
+                                    <div class="amp-status" id="amp-status" data-state="probing">
+                                        <span class="amp-status-led"></span>
+                                        <span class="amp-status-text">Probing</span>
+                                    </div>
+                                </div>
+
+                                <!-- Signal chain, in the order Lavalink really
+                                     runs it. Plugin filters are FIRST in the
+                                     chain, so the compressor and its brickwall
+                                     sit UPSTREAM of the equalizer, not after
+                                     it — which is why their ceiling is divided
+                                     by the EQ boost that follows. -->
+                                <div class="amp-chain" id="amp-chain">
+                                    <div class="amp-stage is-on" data-stage="src">
+                                        <span class="amp-stage-dot"></span>
+                                        <span class="amp-stage-name">Source</span>
+                                    </div>
+                                    <div class="amp-stage" data-stage="gain">
+                                        <span class="amp-stage-dot"></span>
+                                        <span class="amp-stage-name">Drive</span>
+                                    </div>
+                                    <div class="amp-stage" data-stage="hpf">
+                                        <span class="amp-stage-dot"></span>
+                                        <span class="amp-stage-name">28Hz HPF</span>
+                                    </div>
+                                    <div class="amp-stage" data-stage="comp">
+                                        <span class="amp-stage-dot"></span>
+                                        <span class="amp-stage-name">Compressor</span>
+                                    </div>
+                                    <div class="amp-stage" data-stage="lim">
+                                        <span class="amp-stage-dot"></span>
+                                        <span class="amp-stage-name">Limiter</span>
+                                    </div>
+                                    <div class="amp-stage" data-stage="eq">
+                                        <span class="amp-stage-dot"></span>
+                                        <span class="amp-stage-name">Crystal EQ</span>
+                                    </div>
+                                    <div class="amp-stage is-on" data-stage="out">
+                                        <span class="amp-stage-dot"></span>
+                                        <span class="amp-stage-name">Out</span>
+                                    </div>
+                                </div>
+
+                                <div class="deck-grid">
+                                    <!-- ── OUTPUT SECTION ───────────────────────────── -->
+                                    <section class="deck-panel deck-panel--out">
+                                        <header class="deck-panel-head">
+                                            <h4 class="deck-panel-title">Output</h4>
+                                            <span class="deck-panel-note" id="knob-volume-note">Clean &middot; no gain</span>
+                                        </header>
+
+                                        <div class="knob-bay">
+                                            <div class="knob-unit" id="knob-volume" data-min="10" data-max="10000"
+                                                 data-value="100" data-default="100" role="slider"
+                                                 aria-label="Output level" aria-valuemin="10" aria-valuemax="10000"
+                                                 aria-valuenow="100" aria-valuetext="100 percent" tabindex="0">
+                                                <div class="knob">
+                                                    <div class="knob-ticks"></div>
+                                                    <div class="knob-arc"></div>
+                                                    <div class="knob-body">
+                                                        <div class="knob-grip"></div>
+                                                        <div class="knob-pointer"></div>
+                                                    </div>
+                                                </div>
+                                                <div class="knob-readout">
+                                                    <span class="knob-value">100</span><span class="knob-unit-label">%</span>
+                                                </div>
+                                                <div class="knob-caption">Output</div>
+                                            </div>
+
+                                            <!-- Instrument stack. Every number here is a
+                                                 clipping predictor measured against FULL
+                                                 SCALE, not against an arbitrary volume
+                                                 ceiling — the old meter read healthy while
+                                                 the signal was 13x over. -->
+                                            <div class="amp-instruments">
+                                                <div class="amp-meter">
+                                                    <div class="amp-meter-head">
+                                                        <span class="amp-meter-label">Output Peak</span>
+                                                        <span class="amp-meter-val"><b id="amp-peak">97.0</b><i>% FS</i></span>
+                                                    </div>
+                                                    <div class="amp-ladder" id="amp-ladder" aria-hidden="true"></div>
+                                                    <div class="amp-meter-foot">
+                                                        <span>0</span><span>25</span><span>50</span><span>75</span><span>100%</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="amp-readouts">
+                                                    <div class="amp-cell">
+                                                        <span class="amp-cell-label">Headroom</span>
+                                                        <span class="amp-cell-val" id="amp-headroom">3.0<i>%</i></span>
+                                                    </div>
+                                                    <div class="amp-cell">
+                                                        <span class="amp-cell-label">Density</span>
+                                                        <span class="amp-cell-val" id="amp-density">&mdash;</span>
+                                                    </div>
+                                                    <div class="amp-cell">
+                                                        <span class="amp-cell-label">Limit</span>
+                                                        <span class="amp-cell-val" id="amp-amp">&mdash;</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="amp-crystal" id="crystal-meter">
+                                                    <div class="amp-crystal-head">
+                                                        <span class="amp-crystal-label">Crystal</span>
+                                                        <span class="amp-crystal-pct" id="amp-crystal-pct">0%</span>
+                                                    </div>
+                                                    <span class="knob-crystal-bar"><i style="width:0%"></i></span>
+                                                </div>
+                                            </div>
+
+                                            <div class="knob-unit knob-unit--bipolar" id="knob-gain" data-min="-12" data-max="12"
+                                                 data-value="0" data-default="0" role="slider"
+                                                 aria-label="Gain" aria-valuemin="-12" aria-valuemax="12"
+                                                 aria-valuenow="0" aria-valuetext="0 decibels" tabindex="0">
+                                                <div class="knob">
+                                                    <div class="knob-ticks"></div>
+                                                    <div class="knob-arc"></div>
+                                                    <div class="knob-body">
+                                                        <div class="knob-grip"></div>
+                                                        <div class="knob-pointer"></div>
+                                                    </div>
+                                                </div>
+                                                <div class="knob-readout">
+                                                    <span class="knob-value">0.0</span><span class="knob-unit-label">dB</span>
+                                                </div>
+                                                <div class="knob-caption">Gain</div>
+                                            </div>
+
+                                            <!-- Bass fader. Travel is INVERTED on
+                                                 purpose: the top of the throw is
+                                                 maximum CUT, the bottom is maximum
+                                                 boost. That is why it is captioned
+                                                 "Bass Cut" and the scale reads
+                                                 downward — an unlabelled inverted
+                                                 fader next to a normal gain knob
+                                                 reads as a wiring fault.
+                                                 To make it behave conventionally,
+                                                 flip `invert` in initFader().
+
+                                                 Range is -12..+6, NOT -12..+12.
+                                                 The boost side is capped by
+                                                 EQ_PEAK_CEILING (0.15 = +4.08dB on
+                                                 a band) and saturates at about +6
+                                                 requested, so a +12 end stop would
+                                                 be half a fader of dead travel
+                                                 pretending to do something. The cut
+                                                 side is not capped and is accurate
+                                                 to within 0.03dB across its range. -->
+                                            <div class="fader-unit" id="fader-bass" data-min="-12" data-max="6"
+                                                 data-value="0" data-default="0" role="slider"
+                                                 aria-label="Bass cut" aria-valuemin="-12" aria-valuemax="6"
+                                                 aria-valuenow="0" aria-valuetext="0 decibels" tabindex="0"
+                                                 title="Low shelf on the 25-160Hz bands. Pushing the fader UP cuts bass; pulling it DOWN boosts it. Boost is limited to about +4dB so the limiter is not forced into audible gain reduction.">
+                                                <!-- data-db is the single source of truth for
+                                                     where each label prints: initFader() places
+                                                     them on the same inset track the thumb
+                                                     rides. Add or remove a label freely; do not
+                                                     try to space them by hand. -->
+                                                <div class="fader-scale" aria-hidden="true">
+                                                    <span data-db="-12">&minus;12</span>
+                                                    <span data-db="0">0</span>
+                                                    <span data-db="6">+6</span>
+                                                </div>
+                                                <div class="fader">
+                                                    <div class="fader-slot">
+                                                        <div class="fader-ticks"></div>
+                                                        <div class="fader-fill"></div>
+                                                        <div class="fader-detent"></div>
+                                                    </div>
+                                                    <div class="fader-thumb">
+                                                        <span class="fader-thumb-line"></span>
+                                                    </div>
+                                                </div>
+                                                <div class="knob-readout">
+                                                    <span class="knob-value">0.0</span><span class="knob-unit-label">dB</span>
+                                                </div>
+                                                <div class="knob-caption">Bass Cut</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="amp-foot">
+                                        <div class="amp-presets">
+                                            <button class="amp-preset" data-mode="clean">Clean</button>
+                                            <button class="amp-preset" data-mode="loud">Loud</button>
+                                            <button class="amp-preset" data-mode="louder">Louder</button>
+                                            <button class="amp-preset amp-preset--max" data-mode="max">Max</button>
+                                        </div>
+                                            <div class="knob-hint">Drag, scroll or arrow&#8209;key a knob. Double&#8209;click resets.</div>
+                                        </div>
+                                    </section>
+                                </div>
+
+                                <!-- ── FLEET COHERENCE SCOPE ───────────────────────── -->
+                                <section class="deck-panel deck-panel--scope">
+                                    <header class="deck-panel-head">
+                                        <h4 class="deck-panel-title">Fleet Coherence</h4>
+                                        <label class="deck-switch" title="Re-converge the fleet on the leader every few seconds">
+                                            <input type="checkbox" id="autosync-toggle">
+                                            <span class="deck-switch-track"><span class="deck-switch-thumb"></span></span>
+                                            <span class="deck-switch-label">Auto&#8209;sync</span>
+                                        </label>
+                                    </header>
+
+                                    <div class="scope-stats">
+                                        <div class="scope-stat" id="scope-stat-drift">
+                                            <span class="scope-stat-label">Drift</span>
+                                            <span class="scope-stat-val" id="scope-skew">&mdash;</span>
+                                        </div>
+                                        <div class="scope-stat">
+                                            <span class="scope-stat-label">Units</span>
+                                            <span class="scope-stat-val" id="scope-units">0</span>
+                                        </div>
+                                        <div class="scope-stat" title="Aligned copies sum coherently at 20·log10(N). Out of sync they only sum at 10·log10(N) — half the dB, and smeared transients.">
+                                            <span class="scope-stat-label">Fleet Gain</span>
+                                            <span class="scope-stat-val" id="scope-gain">&mdash;</span>
+                                        </div>
+                                        <div class="scope-stat">
+                                            <span class="scope-stat-label">Lock</span>
+                                            <span class="scope-stat-val" id="scope-lock">&mdash;</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="scope-rows" id="scope-rows">
+                                        <div class="scope-empty">No unit is playing.</div>
+                                    </div>
+
+                                    <div class="scope-foot" id="scope-foot">
+                                        Aligned copies sum coherently. Drift past tolerance costs level and smears transients.
+                                    </div>
+                                </section>
+                            </div>
+                            <input type="hidden" id="music-volume" value="100">
+
+                            <div class="block-label">Tone Presets</div>
+                            <div class="controls">
+                                <button class="btn btn-sm btn-secondary filter-btn" data-filter="vocal" title="Loud and vocal-forward: bass cut back, 1k&ndash;4k lifted">Vocal (Loud)</button>
+                                <button class="btn btn-sm btn-secondary filter-btn" data-filter="bassboost">Bass</button>
+                                <button class="btn btn-sm btn-secondary filter-btn" data-filter="clearhigh">Clarity</button>
+                                <button class="btn btn-sm btn-secondary filter-btn" data-filter="nightcore">Nightcore</button>
+                                <button class="btn btn-sm btn-secondary filter-btn" data-filter="vaporwave">Vaporwave</button>
+                                <button class="btn btn-sm btn-danger filter-btn" data-filter="clear">Reset</button>
+                            </div>
+
+                            <div class="divider"></div>
+
+                            <div class="block-label">Voice Link</div>
+                            <div class="input-group">
+                                <label for="music-channel-id">Channel ID</label>
+                                <input type="text" id="music-channel-id" placeholder="Channel ID (optional)">
+                            </div>
+                            <div class="controls mt-10">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="music-deafen">
+                                    <span class="checkmark"></span>
+                                    Deafen
+                                </label>
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="music-mute">
+                                    <span class="checkmark"></span>
+                                    Mute
+                                </label>
+                            </div>
+                            <div class="controls mt-15">
+                                <button class="btn btn-primary join-owner-music"><i class="fas fa-user-shield" aria-hidden="true"></i> Join Owner</button>
+                                <button class="btn btn-success join-id-music"><i class="fas fa-hashtag" aria-hidden="true"></i> Join by ID</button>
+                                <button class="btn btn-secondary follow-owner-music"><i class="fas fa-person-walking" aria-hidden="true"></i> Follow Owner</button>
+                                <button class="btn btn-danger leave-vc-music"><i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i> Leave</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ----------------------- TOKEN MANAGER ----------------------- -->
+            <section id="token-manager" class="tab-content">
+                <header class="tab-header">
+                    <div>
+                        <span class="kicker">Operations / Fleet Registry</span>
+                        <h1>Token Manager</h1>
+                        <span class="small">Add, authorise and retire units without restarting the control unit</span>
+                    </div>
+                    <div class="header-actions">
+                        <button id="tm-refresh" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-rotate" aria-hidden="true"></i> Refresh
+                        </button>
+                    </div>
+                </header>
+
+                <div class="section-body">
+                    <div class="card-grid">
+                        <!-- Enrol new tokens -->
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <h2><i class="fas fa-plus" aria-hidden="true"></i> Enrol Units</h2>
+                                    <span class="small">Paste one token per line — bulk supported</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="input-group">
+                                    <label for="tm-token-input">Bot / User Tokens</label>
+                                    <textarea id="tm-token-input" rows="5" placeholder="Paste tokens here, one per line…" spellcheck="false"></textarea>
+                                </div>
+                                <label class="checkbox-container" style="margin-bottom: 16px;">
+                                    <input type="checkbox" id="tm-auto-login" checked>
+                                    <span class="checkmark"></span>
+                                    Log in immediately after adding
+                                </label>
+                                <button id="tm-add-btn" class="btn btn-primary btn-block">
+                                    <i class="fas fa-user-plus" aria-hidden="true"></i> Add to Fleet
+                                </button>
+                                <div id="tm-add-result" class="mt-15"></div>
+                            </div>
+                        </div>
+
+                        <!-- Registry stats -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-chart-simple" aria-hidden="true"></i> Registry</h2>
+                                <div class="counter-chip">
+                                    <span id="tm-count">0</span>
+                                    <span>Units</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="telemetry-strip" style="margin-bottom: 0;">
+                                    <div class="telemetry-cell">
+                                        <span class="t-label">Total</span>
+                                        <span class="t-value"><i class="fas fa-layer-group" aria-hidden="true"></i> <span id="tm-stat-total">0</span></span>
+                                    </div>
+                                    <div class="telemetry-cell">
+                                        <span class="t-label">Online</span>
+                                        <span class="t-value"><i class="fas fa-circle-check" aria-hidden="true"></i> <span id="tm-stat-online">0</span></span>
+                                    </div>
+                                    <div class="telemetry-cell">
+                                        <span class="t-label">Offline</span>
+                                        <span class="t-value"><i class="fas fa-circle-minus" aria-hidden="true"></i> <span id="tm-stat-offline">0</span></span>
+                                    </div>
+                                </div>
+                                <p class="small mt-20" style="color: var(--text-3); line-height: 1.7;">
+                                    Tokens are saved to <code>tokens.txt</code> and take effect instantly.
+                                    Removing a unit disconnects it and clears its voice sessions.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live token table -->
+                    <div class="card" style="margin-top: 20px;">
+                        <div class="card-header">
+                            <h2><i class="fas fa-id-card" aria-hidden="true"></i> Enrolled Units</h2>
+                        </div>
+                        <div class="card-body">
+                            <div id="tm-list" class="token-manager-list">
+                                <div class="empty-state">Loading fleet registry…</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ------------------------- MESSAGING ------------------------- -->
+            <section id="spammer" class="tab-content">
+                <header class="tab-header">
+                    <div>
+                        <span class="kicker">Operations / Messaging</span>
+                        <h1>Message Dispatch</h1>
+                        <span class="small">Channel broadcast and direct message automation</span>
+                    </div>
+                </header>
+
+                <div class="section-body">
+                    <div class="card-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <h2><i class="fas fa-comments" aria-hidden="true"></i> Channel Dispatch</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="input-group">
+                                    <label for="spam-channel-id">Target Channel ID</label>
+                                    <input type="text" id="spam-channel-id" placeholder="000000000000000000">
+                                </div>
+                                <div class="input-group">
+                                    <label for="spam-content">Payload</label>
+                                    <textarea id="spam-content" rows="4" placeholder="Message content…"></textarea>
+                                </div>
+                                <div class="input-group">
+                                    <label for="spam-interval">Interval (seconds)</label>
+                                    <input type="number" id="spam-interval" value="5" min="1">
+                                </div>
+                                <div class="controls">
+                                    <button id="send-once" class="btn btn-primary"><i class="fas fa-paper-plane" aria-hidden="true"></i> Send Once</button>
+                                    <button id="start-spam" class="btn btn-success"><i class="fas fa-rotate" aria-hidden="true"></i> Start Loop</button>
+                                    <button id="stop-spam" class="btn btn-danger"><i class="fas fa-circle-stop" aria-hidden="true"></i> Halt</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <h2><i class="fas fa-user-plus" aria-hidden="true"></i> Direct Dispatch</h2>
+                                    <span class="small">Mass friend requests and DM delivery</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="input-group">
+                                    <label for="adv-spam-target-user">Target User (ID or Username)</label>
+                                    <input type="text" id="adv-spam-target-user" placeholder="User ID or username">
+                                </div>
+                                <div class="input-group">
+                                    <label for="adv-spam-content">DM Content (optional for requests)</label>
+                                    <textarea id="adv-spam-content" rows="3" placeholder="Direct message content…"></textarea>
+                                </div>
+                                <div class="controls">
+                                    <button id="send-friend-request" class="btn btn-primary" style="flex: 1;">
+                                        <i class="fas fa-user-check" aria-hidden="true"></i> Friend Request
+                                    </button>
+                                    <button id="send-dm-spam" class="btn btn-danger" style="flex: 1;">
+                                        <i class="fas fa-envelope" aria-hidden="true"></i> Send DM
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ------------------------- REACTIONS ------------------------- -->
+            <section id="reactions" class="tab-content">
+                <header class="tab-header">
+                    <div>
+                        <span class="kicker">Operations / Reactions</span>
+                        <h1>Mass Reaction</h1>
+                        <span class="small">Apply, mirror or strip reactions across selected units</span>
+                    </div>
+                </header>
+
+                <div class="section-body">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-bolt" aria-hidden="true"></i> Reaction Control</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="input-group">
+                                <label for="reaction-channel-id">Channel ID</label>
+                                <input type="text" id="reaction-channel-id" placeholder="000000000000000000">
+                            </div>
+                            <div class="input-group">
+                                <label for="reaction-message-id">Message ID</label>
+                                <input type="text" id="reaction-message-id" placeholder="000000000000000000">
+                            </div>
+                            <div class="input-group">
+                                <label for="reaction-emojis">Emoji Set (comma separated)</label>
+                                <input type="text" id="reaction-emojis" placeholder="🔥, ✅, ❤️">
+                            </div>
+                            <div class="controls">
+                                <button id="add-reactions" class="btn btn-success"><i class="fas fa-plus" aria-hidden="true"></i> Add</button>
+                                <button id="copy-reactions" class="btn btn-primary"><i class="fas fa-copy" aria-hidden="true"></i> Mirror Existing</button>
+                                <button id="remove-reactions" class="btn btn-danger"><i class="fas fa-minus" aria-hidden="true"></i> Strip</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- --------------------- TOKEN DIAGNOSTICS --------------------- -->
+            <section id="tokens" class="tab-content">
+                <header class="tab-header">
+                    <div>
+                        <span class="kicker">Operations / Diagnostics</span>
+                        <h1>Token Diagnostics</h1>
+                        <span class="small">Validity scan, metadata extraction and recovery routines</span>
+                    </div>
+                </header>
+
+                <div class="section-body">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-shield-halved" aria-hidden="true"></i> Health Check</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="controls">
+                                <button id="check-validity" class="btn btn-primary">
+                                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i> Run Scan
+                                </button>
+                                <button id="extract-info" class="btn btn-secondary">
+                                    <i class="fas fa-file-export" aria-hidden="true"></i> Extract Info
+                                </button>
+                                <button id="auto-recover" class="btn btn-warning">
+                                    <i class="fas fa-screwdriver-wrench" aria-hidden="true"></i> Auto Recover
+                                </button>
+                            </div>
+                            <div id="validity-result" class="mt-20"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ----------------------- PRESENCE & RPC ----------------------- -->
+            <section id="settings" class="tab-content">
+                <header class="tab-header">
+                    <div>
+                        <span class="kicker">System / Presence</span>
+                        <h1>Presence &amp; RPC</h1>
+                        <span class="small">Rich presence and status configuration across the fleet</span>
+                    </div>
+                </header>
+
+                <div class="section-body">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-sliders" aria-hidden="true"></i> Rich Presence</h2>
+                        </div>
+                        <div class="card-body">
+                            <div class="input-group">
+                                <label for="rpc-status">Status</label>
+                                <select id="rpc-status">
+                                    <option value="online">Online</option>
+                                    <option value="idle">Idle</option>
+                                    <option value="dnd">Do Not Disturb</option>
+                                    <option value="invisible">Invisible</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="rpc-type">Activity Type</label>
+                                <select id="rpc-type">
+                                    <option value="playing">Playing</option>
+                                    <option value="streaming">Streaming</option>
+                                    <option value="listening">Listening</option>
+                                    <option value="watching">Watching</option>
+                                    <option value="competing">Competing</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="rpc-text">Activity Text</label>
+                                <input type="text" id="rpc-text" placeholder="e.g. Nürburgring Nordschleife">
+                            </div>
+                            <button id="update-status" class="btn btn-primary">
+                                <i class="fas fa-floppy-disk" aria-hidden="true"></i> Commit Presence
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ------------------------ LIVE CONSOLE ------------------------ -->
+            <section id="terminal" class="tab-content">
+                <header class="tab-header">
+                    <div>
+                        <span class="kicker">System / Console</span>
+                        <h1>Live Console</h1>
+                        <span class="small">Real-time execution log stream</span>
+                    </div>
+                    <div class="header-actions">
+                        <button id="clear-terminal-btn" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-broom" aria-hidden="true"></i> Clear
+                        </button>
+                        <button id="copy-terminal-btn" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-copy" aria-hidden="true"></i> Copy
+                        </button>
+                    </div>
+                </header>
+
+                <div class="section-body">
+                    <div class="terminal-container" id="terminal-logs">
+                        <div class="log-entry system">[SYSTEM] Control unit initialized.</div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="script.js?v=16"></script>
+</body>
+
+</html>

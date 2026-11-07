@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Large binaries (exceeding GitHub file limit / downloaded at runtime)
+ffmpeg.exe
+yt-dlp.exe
+*.exe
+*.apk
+*.jar
+Lavalink/Lavalink.jar
+Lavalink/jre/
+Lavalink/logs/
+Lavalink/*.lock
+
+# Build & packaging artifacts
+dist_electron/
+dist_electron_build/
+
+# Logs
+*.log
+crash.log
+_build.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Sensitive credentials & runtime files
+tokens.txt
+tokens*.txt
+
+# OS metadata
+Thumbs.db
+.DS_Store

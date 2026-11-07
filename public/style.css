@@ -1,0 +1,4384 @@
+/* ============================================================
+   SHRAVAN // M CONTROL UNIT
+   Design language: BMW iDrive cockpit — precision, hairlines,
+   instrument-cluster gauges, M-stripe accents, sharp geometry.
+   ============================================================ */
+
+/* Fonts are loaded by the <link> in index.html, not by an @import here. An
+   @import must be fetched *after* this stylesheet has been parsed, which puts
+   the font request at the end of a serial chain instead of letting the browser
+   start it in parallel with the CSS. The <link> alone is strictly faster. */
+
+:root {
+    /* --- Cockpit surfaces --- */
+    --bg: #07080A;
+    --bg-deep: #050608;
+    --surface: #0D0F12;
+    --surface-2: #12151A;
+    --surface-3: #181C22;
+    --surface-hi: #1F242C;
+
+    /* --- Hairlines --- */
+    --line: rgba(255, 255, 255, 0.07);
+    --line-strong: rgba(255, 255, 255, 0.14);
+
+    /* --- Typography --- */
+    --text: #EDEFF2;
+    --text-2: #A7AEB8;
+    --text-3: #6B7280;
+
+    /* --- M stripes --- */
+    --m-light: #3C9BE0;
+    --m-blue: #1B4FA0;
+    --m-navy: #16264F;
+    --m-red: #E7222E;
+
+    /* --- Signals --- */
+    --accent: #2E8FE0;
+    --accent-hi: #4FB0F5;
+    --accent-deep: #1668B0;
+    --ok: #3DBE7C;
+    --warn: #E8A33D;
+    --alert: #E7222E;
+
+    --radius: 3px;
+    --radius-lg: 4px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --t: 0.22s var(--ease);
+
+    /* --- Motion ---
+       Every transition and animation in the sheet routes its duration through
+       one of these, so the reduced-motion block near the bottom can neutralise
+       the whole interface by rewriting three values instead of hunting down
+       individual rules. */
+    --t-fast: 0.12s var(--ease);
+    --t-slow: 0.4s var(--ease);
+    --motion-scale: 1;
+
+    /* --- Elevation ---
+       An instrument cluster is lit from above: a bright hairline on the top
+       edge, shadow below. Kept as tokens so a raised surface reads the same
+       whether it is a card, a modal or a dropdown. */
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
+    --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.6);
+    --bevel: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+    /* --- Focus ---
+       Two rings, not one: a dark outer band so the bright inner band stays
+       visible against an accent-coloured surface too. Derived from --accent so
+       each livery gets a focus ring in its own colour for free. */
+    --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+    --focus-ring-tight: 0 0 0 2px var(--accent);
+
+    /* --- Accent alpha ramp ---
+       Selected rows, hover washes and glows were written as literal
+       rgba(46, 143, 224, …) — the BMW blue — in about a dozen places, so picking
+       McLaren orange or Bentley green repainted the buttons and left those
+       surfaces blue. These derive from --accent instead.
+
+       Each livery block below only overrides --accent, and a var() inside a
+       custom property is resolved against the element that finally uses it, so
+       redefining --accent on :root re-mixes this whole ramp for free — no
+       per-livery duplication. */
+    --accent-a06: color-mix(in srgb, var(--accent) 6%, transparent);
+    --accent-a10: color-mix(in srgb, var(--accent) 10%, transparent);
+    --accent-a20: color-mix(in srgb, var(--accent) 20%, transparent);
+    --accent-a30: color-mix(in srgb, var(--accent) 30%, transparent);
+    --accent-a45: color-mix(in srgb, var(--accent) 45%, transparent);
+    --accent-a70: color-mix(in srgb, var(--accent) 70%, transparent);
+
+    /* --- Legacy aliases (script.js injects inline styles using these) --- */
+    --bg-primary: var(--bg);
+    --bg-glass: var(--surface);
+    --border-color: var(--line);
+    --accent-purple: var(--accent);
+    --accent-purple-hover: var(--accent-deep);
+    --accent-glow: rgba(46, 143, 224, 0.35);
+    --text-main: var(--text);
+    --text-muted: var(--text-2);
+    --text-dark: var(--text-3);
+    --success: var(--ok);
+    --danger: var(--alert);
+    --warning: var(--warn);
+    --info: var(--accent);
+}
+
+/* ============ BRAND THEME LINES (data-theme swapped by script.js) ============
+   Each theme repaints the accent set + the three-colour racing stripe
+   (--m-light / --m-blue / --m-red) so every surface re-liveries cohesively.
+   Default (no data-theme) is BMW M — defined in :root above.
+   ============================================================================ */
+
+/* Mercedes-AMG — Petronas teal over gunmetal silver */
+[data-theme="mercedes"] {
+    --accent: #00A19C;
+    --accent-hi: #2FD3CE;
+    --accent-deep: #00726E;
+    --accent-glow: rgba(0, 161, 156, 0.35);
+    --m-light: #00A19C;
+    --m-blue: #4A5561;
+    --m-red: #C6CDD4;
+    --surface: #0C0F10;
+    --surface-2: #121618;
+}
+
+/* Ferrari — Rosso Corsa red + Modena yellow */
+[data-theme="ferrari"] {
+    --accent: #D40000;
+    --accent-hi: #FF3B3B;
+    --accent-deep: #960000;
+    --accent-glow: rgba(212, 0, 0, 0.38);
+    --m-light: #FFE500;
+    --m-blue: #C40000;
+    --m-red: #7A0000;
+    --surface: #120A0A;
+    --surface-2: #180E0E;
+}
+
+/* Lamborghini — Giallo yellow on carbon black */
+[data-theme="lamborghini"] {
+    --accent: #F5C518;
+    --accent-hi: #FFDE4D;
+    --accent-deep: #B8900A;
+    --accent-glow: rgba(245, 197, 24, 0.35);
+    --m-light: #F5C518;
+    --m-blue: #3A3320;
+    --m-red: #1A1A1A;
+    --bg: #050504;
+    --surface: #0C0C0A;
+    --surface-2: #131310;
+}
+
+/* Porsche — Guards red + platinum */
+[data-theme="porsche"] {
+    --accent: #C8102E;
+    --accent-hi: #EE4058;
+    --accent-deep: #8E0B20;
+    --accent-glow: rgba(200, 16, 46, 0.35);
+    --m-light: #D0A85C;
+    --m-blue: #9CA3AB;
+    --m-red: #C8102E;
+    --surface: #0E0C0D;
+    --surface-2: #141113;
+}
+
+/* Audi — platinum silver + Audi red */
+[data-theme="audi"] {
+    --accent: #BB0A30;
+    --accent-hi: #E63955;
+    --accent-deep: #85061F;
+    --accent-glow: rgba(187, 10, 48, 0.34);
+    --m-light: #D0D3D6;
+    --m-blue: #8A9096;
+    --m-red: #BB0A30;
+    --surface: #0C0D0E;
+    --surface-2: #121416;
+}
+
+/* McLaren — Papaya orange + speedmark blue */
+[data-theme="mclaren"] {
+    --accent: #FF6A13;
+    --accent-hi: #FF9147;
+    --accent-deep: #C24A08;
+    --accent-glow: rgba(255, 106, 19, 0.38);
+    --m-light: #0090D0;
+    --m-blue: #FF6A13;
+    --m-red: #C24A08;
+    --surface: #100C09;
+    --surface-2: #16110C;
+}
+
+/* Bugatti — EB blue duo-tone */
+[data-theme="bugatti"] {
+    --accent: #0A3D91;
+    --accent-hi: #3C74D4;
+    --accent-deep: #06265C;
+    --accent-glow: rgba(30, 90, 200, 0.42);
+    --m-light: #6FA8FF;
+    --m-blue: #0A3D91;
+    --m-red: #7A1420;
+    --surface: #080A10;
+    --surface-2: #0D1018;
+}
+
+/* Rolls-Royce — royal purple + spirit gold */
+[data-theme="rolls-royce"] {
+    --accent: #6B2FB5;
+    --accent-hi: #9A5FE0;
+    --accent-deep: #46207A;
+    --accent-glow: rgba(107, 47, 181, 0.38);
+    --m-light: #D9B45A;
+    --m-blue: #6B2FB5;
+    --m-red: #3A1A66;
+    --surface: #0C0A11;
+    --surface-2: #120F18;
+}
+
+/* Aston Martin — British racing green + lime */
+[data-theme="aston-martin"] {
+    --accent: #00594F;
+    --accent-hi: #1FA592;
+    --accent-deep: #003B34;
+    --accent-glow: rgba(0, 120, 105, 0.36);
+    --m-light: #C6E84F;
+    --m-blue: #00594F;
+    --m-red: #05302B;
+    --surface: #080D0C;
+    --surface-2: #0D1311;
+}
+
+/* Bentley — heritage green + cream */
+[data-theme="bentley"] {
+    --accent: #1E5233;
+    --accent-hi: #3E9160;
+    --accent-deep: #123821;
+    --accent-glow: rgba(30, 120, 70, 0.34);
+    --m-light: #E6DCC0;
+    --m-blue: #1E5233;
+    --m-red: #4A3A1E;
+    --surface: #090C0A;
+    --surface-2: #0E120F;
+}
+
+/* Maserati — Trident blue + white */
+[data-theme="maserati"] {
+    --accent: #1C3F94;
+    --accent-hi: #3E6BD0;
+    --accent-deep: #122A63;
+    --accent-glow: rgba(28, 63, 148, 0.4);
+    --m-light: #E9EDF2;
+    --m-blue: #1C3F94;
+    --m-red: #10224F;
+    --surface: #090B10;
+    --surface-2: #0E1118;
+}
+
+/* Tesla — clean red on deep black */
+[data-theme="tesla"] {
+    --accent: #E31937;
+    --accent-hi: #FF4A61;
+    --accent-deep: #A11026;
+    --accent-glow: rgba(227, 25, 55, 0.36);
+    --m-light: #E9EDF2;
+    --m-blue: #5A6068;
+    --m-red: #E31937;
+    --bg: #000000;
+    --surface: #0A0A0B;
+    --surface-2: #101012;
+}
+
+/* ============================ BASE ============================ */
+
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow: hidden;
+    font-feature-settings: "tnum" 1, "cv05" 1;
+    letter-spacing: -0.011em;
+}
+
+/* Fine cockpit texture — barely-there horizontal scan grid */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.014) 0 1px, transparent 1px 3px),
+        radial-gradient(120% 80% at 50% -20%, var(--accent-glow) 0%, transparent 60%);
+    animation: ambientShift 18s ease-in-out infinite alternate;
+}
+
+@keyframes ambientShift {
+    0% { opacity: 0.9; transform: translate3d(0, 0, 0); }
+    100% { opacity: 1; transform: translate3d(0, -2%, 0); }
+}
+
+::selection {
+    background: var(--accent);
+    color: #fff;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-deep);
+}
+
+::-webkit-scrollbar-thumb {
+    background: #23282F;
+    border: 2px solid var(--bg-deep);
+    border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+}
+
+/* ============================ SHELL ============================ */
+
+.app-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    position: relative;
+    z-index: 1;
+}
+
+/* =========================== SIDEBAR =========================== */
+
+.sidebar {
+    width: 274px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    z-index: 40;
+}
+
+/* M-stripe rail running down the sidebar edge */
+.sidebar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -1px;
+    width: 2px;
+    height: 168px;
+    background: linear-gradient(180deg,
+            var(--m-light) 0 33.33%,
+            var(--m-blue) 33.33% 66.66%,
+            var(--m-red) 66.66% 100%);
+}
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 26px 22px 24px;
+    border-bottom: 1px solid var(--line);
+}
+
+/* Roundel emblem */
+.roundel {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background:
+        conic-gradient(from 0deg,
+            #10151C 0deg 90deg,
+            #2E8FE0 90deg 180deg,
+            #10151C 180deg 270deg,
+            #2E8FE0 270deg 360deg);
+    border: 3px solid #1A1F27;
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.14),
+        inset 0 0 0 1px rgba(0, 0, 0, 0.7),
+        0 4px 14px rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.roundel::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.16), transparent 60%);
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.brand-text .title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.brand-text .subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+/* Nav */
+.nav-links {
+    list-style: none;
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 0 18px;
+}
+
+.nav-group-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    padding: 16px 24px 9px;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nav-group-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+}
+
+.nav-links li[data-tab] {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 11px 24px 11px 23px;
+    cursor: pointer;
+    color: var(--text-2);
+    font-size: 0.855rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    border-left: 3px solid transparent;
+    transition: color var(--t), background var(--t), border-color var(--t);
+    user-select: none;
+}
+
+.nav-links li[data-tab] i {
+    width: 18px;
+    font-size: 0.92rem;
+    text-align: center;
+    color: var(--text-3);
+    transition: color var(--t);
+}
+
+.nav-links li[data-tab]:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.028);
+}
+
+.nav-links li[data-tab]:hover i {
+    color: var(--text-2);
+}
+
+.nav-links li[data-tab].active {
+    color: #fff;
+    font-weight: 600;
+    background: linear-gradient(90deg, var(--accent-glow) 0%, transparent 85%);
+    border-left-color: var(--accent);
+    box-shadow: inset 0 0 30px -18px var(--accent-hi);
+}
+
+.nav-links li[data-tab].active i {
+    color: var(--accent-hi);
+}
+
+/* M-stripe tag on the active row */
+.nav-links li[data-tab].active::after {
+    content: '';
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 3px;
+    background: linear-gradient(90deg,
+            var(--m-light) 0 33.33%,
+            var(--m-blue) 33.33% 66.66%,
+            var(--m-red) 66.66% 100%);
+}
+
+.sidebar-footer {
+    padding: 16px 20px 20px;
+    border-top: 1px solid var(--line);
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--text-2);
+}
+
+.dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--ok);
+}
+
+.dot.pulse {
+    box-shadow: 0 0 0 0 rgba(61, 190, 124, 0.7);
+    animation: pulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(61, 190, 124, 0.55); }
+    70% { box-shadow: 0 0 0 8px rgba(61, 190, 124, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(61, 190, 124, 0); }
+}
+
+.build-stamp {
+    margin-top: 12px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+/* ========================= MAIN CONTENT ========================= */
+
+.content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    background:
+        radial-gradient(100% 60% at 50% 0%, var(--accent-a06) 0%, transparent 70%),
+        var(--bg);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+    animation: riseIn 0.32s var(--ease);
+}
+
+@keyframes riseIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Sticky instrument header */
+.tab-header {
+    position: sticky;
+    top: 0;
+    z-index: 25;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding: 26px 40px 22px;
+    background: rgba(7, 8, 10, 0.9);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--line);
+}
+
+.tab-header::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 96px;
+    height: 2px;
+    background: linear-gradient(90deg,
+            var(--m-light) 0 33.33%,
+            var(--m-blue) 33.33% 66.66%,
+            var(--m-red) 66.66% 100%);
+}
+
+.tab-header .kicker {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 9px;
+}
+
+.tab-header h1 {
+    font-size: 1.72rem;
+    font-weight: 700;
+    letter-spacing: -0.028em;
+    line-height: 1.1;
+    color: var(--text);
+}
+
+.tab-header .small {
+    display: block;
+    margin-top: 7px;
+    font-size: 0.83rem;
+    font-weight: 400;
+    color: var(--text-3);
+    letter-spacing: 0;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.section-body {
+    padding: 30px 40px 64px;
+}
+
+/* ====================== INSTRUMENT CLUSTER ====================== */
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 26px;
+}
+
+.stat-card {
+    background: var(--surface);
+    padding: 30px 24px 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    cursor: pointer;
+    position: relative;
+    transition: background var(--t);
+}
+
+.stat-card:hover {
+    background: var(--surface-2);
+}
+
+.stat-card::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    width: 0;
+    background: var(--accent);
+    transition: width 0.32s var(--ease);
+}
+
+.stat-card:hover::after {
+    width: 100%;
+}
+
+/* Tachometer-style dial */
+.gauge {
+    position: relative;
+    width: 132px;
+    height: 132px;
+    display: grid;
+    place-items: center;
+}
+
+/* tick ring */
+.gauge::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: repeating-conic-gradient(from 215deg,
+            rgba(255, 255, 255, 0.26) 0deg 0.9deg,
+            transparent 0.9deg 11.5deg);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px));
+}
+
+/* redline sweep + accent arc */
+.gauge::after {
+    content: '';
+    position: absolute;
+    inset: 9px;
+    border-radius: 50%;
+    background: conic-gradient(from 215deg,
+            var(--accent-deep) 0deg,
+            var(--accent) 132deg,
+            var(--accent-hi) 200deg,
+            var(--m-red) 235deg,
+            transparent 250deg 360deg);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    opacity: 0.85;
+    transition: opacity var(--t);
+}
+
+.stat-card:hover .gauge::after {
+    opacity: 1;
+}
+
+.gauge-face {
+    position: relative;
+    z-index: 2;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 18%, var(--surface-3) 0%, var(--bg-deep) 78%);
+    border: 1px solid var(--line-strong);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 3px 14px rgba(0, 0, 0, 0.85);
+}
+
+.stat-card p {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2.1rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #fff;
+    letter-spacing: -0.03em;
+    text-shadow: 0 0 18px var(--accent-glow);
+    transition: text-shadow var(--t);
+}
+
+.stat-card:hover p {
+    text-shadow: 0 0 26px var(--accent-hi);
+}
+
+.gauge-unit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.56rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-top: 6px;
+}
+
+.stat-card h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-2);
+    text-align: center;
+}
+
+/* ========================= AMPLIFIER RACK =========================
+   A discrete instrument module rather than a pair of loose knobs: brushed
+   header rail, plugin status lamp, live signal-chain strip, and the meters
+   that actually predict clipping. Everything is driven by theme tokens, so
+   all 13 brand liveries repaint it without a single hard-coded colour.
+   ================================================================= */
+.deck {
+    position: relative;
+    margin: 4px 0 2px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.022), transparent 62%),
+        var(--surface-2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 26px rgba(0, 0, 0, 0.42);
+    overflow: hidden;
+}
+
+/* M-stripe spine down the left edge — the family signature */
+.deck::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg,
+            var(--m-light) 0 33%,
+            var(--m-blue) 33% 66%,
+            var(--m-red) 66% 100%);
+    opacity: 0.9;
+    z-index: 1;
+}
+
+.deck-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 14px 10px 16px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, var(--surface-3), var(--surface-2));
+}
+
+.deck-brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-width: 0;
+}
+
+.deck-brand-mark {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    background: var(--bg-deep);
+    color: var(--accent);
+    font-size: 0.72rem;
+}
+
+.deck-brand-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.deck-brand-main {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
+.deck-brand-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.52rem;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---- plugin status lamp ---- */
+.amp-status {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 9px;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: var(--bg-deep);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.53rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-2);
+    white-space: nowrap;
+}
+
+.amp-status-led {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-3);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+    transition: background var(--t), box-shadow var(--t);
+}
+
+.amp-status[data-state="probing"] .amp-status-led {
+    background: var(--warn);
+    animation: amp-pulse 1.15s var(--ease) infinite;
+}
+
+.amp-status[data-state="armed"] {
+    border-color: rgba(61, 190, 124, 0.34);
+    color: var(--ok);
+}
+
+.amp-status[data-state="armed"] .amp-status-led {
+    background: var(--ok);
+    box-shadow: 0 0 9px rgba(61, 190, 124, 0.75);
+}
+
+.amp-status[data-state="absent"] {
+    border-color: rgba(232, 163, 61, 0.3);
+    color: var(--warn);
+}
+
+.amp-status[data-state="absent"] .amp-status-led {
+    background: var(--warn);
+    box-shadow: 0 0 8px rgba(232, 163, 61, 0.6);
+}
+
+@keyframes amp-pulse {
+
+    0%,
+    100% {
+        opacity: 0.35;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+/* ---- signal chain strip ---- */
+.amp-chain {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 9px 14px 9px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-deep);
+}
+
+.amp-stage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-right: 15px;
+    margin-right: 11px;
+    opacity: 0.4;
+    transition: opacity var(--t);
+}
+
+/* hairline arrow between stages */
+.amp-stage:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    width: 9px;
+    height: 1px;
+    background: var(--line-strong);
+    transform: translateY(-50%);
+}
+
+.amp-stage.is-on {
+    opacity: 1;
+}
+
+.amp-stage-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--surface-hi);
+    border: 1px solid var(--line-strong);
+    transition: background var(--t), box-shadow var(--t), border-color var(--t);
+}
+
+.amp-stage.is-on .amp-stage-dot {
+    background: var(--accent-hi);
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.amp-stage[data-stage="lim"].is-on .amp-stage-dot {
+    background: var(--ok);
+    border-color: var(--ok);
+    box-shadow: 0 0 8px rgba(61, 190, 124, 0.7);
+}
+
+/* The compressor is the only stage that makes anything LOUDER rather than
+   safer, so it gets its own colour instead of sharing the limiter's green.
+   Green reads as "protected"; this one reads as "working". */
+.amp-stage[data-stage="comp"].is-on .amp-stage-dot {
+    background: var(--warn);
+    border-color: var(--warn);
+    box-shadow: 0 0 8px rgba(232, 163, 61, 0.7);
+}
+
+.amp-stage-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.52rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-2);
+    white-space: nowrap;
+}
+
+/* ======================= DECK LAYOUT =======================
+   One column since the fader bay came out: the output section (two
+   132px knobs + the instrument stack between them) and the coherence
+   scope stack full width. The 1px gap on a --line background is what
+   draws the hairline between panels.
+   ========================================================== */
+.deck-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+    background: var(--line);
+}
+
+.deck-panel {
+    padding: 13px 16px 14px;
+    background: var(--surface-2);
+    min-width: 0;
+}
+
+.deck-panel--scope {
+    /* Was a spanning row when the grid had two columns. The grid is one
+       column now, so this only carries the divider and the gradient. */
+    border-top: 1px solid var(--line);
+    background: linear-gradient(180deg, var(--surface-2), var(--bg-deep));
+}
+
+.deck-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+}
+
+.deck-panel-title {
+    margin: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.56rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-2);
+}
+
+.deck-panel-note {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.53rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ======================= AMPLIFIER KNOBS =======================
+   Same instrument-cluster language as .gauge: 250deg sweep starting
+   at 215deg, hairline tick ring, machined centre cap with pointer.
+   Knob 1 (Output) fills from the left. Knob 2 (Gain) is bipolar and
+   fills outward from 12 o'clock in either direction.
+   ============================================================== */
+.knob-bay {
+    display: flex;
+    gap: 22px;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: 2px 0;
+}
+
+.knob-unit {
+    --sweep: 250deg;
+    --start: 215deg;
+    --fill: 0deg;
+    --fill-from: var(--start);
+    position: relative;
+    width: 132px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    outline: none;
+}
+
+.knob {
+    position: relative;
+    width: 118px;
+    height: 118px;
+    display: grid;
+    place-items: center;
+    cursor: grab;
+    touch-action: none;
+}
+
+.knob-unit.is-active .knob {
+    cursor: grabbing;
+}
+
+/* hairline tick ring */
+.knob-ticks {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: repeating-conic-gradient(from var(--start),
+            rgba(255, 255, 255, 0.26) 0deg 0.9deg,
+            transparent 0.9deg 11.5deg);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 8px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 8px));
+}
+
+/* travelled arc — the lit portion of the sweep */
+.knob-arc {
+    position: absolute;
+    inset: 8px;
+    border-radius: 50%;
+    background: conic-gradient(from var(--fill-from),
+            var(--accent-deep) 0deg,
+            var(--accent) calc(var(--fill) * 0.45),
+            var(--accent-hi) var(--fill),
+            transparent var(--fill) 360deg);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    opacity: 0.9;
+    transition: opacity var(--t);
+}
+
+.knob-unit:hover .knob-arc,
+.knob-unit:focus-visible .knob-arc {
+    opacity: 1;
+}
+
+/* redline once output passes the safe-loud threshold */
+.knob-unit.is-hot .knob-arc {
+    background: conic-gradient(from var(--fill-from),
+            var(--accent-deep) 0deg,
+            var(--accent) calc(var(--fill) * 0.4),
+            var(--accent-hi) calc(var(--fill) * 0.72),
+            var(--m-red) var(--fill),
+            transparent var(--fill) 360deg);
+}
+
+/* centre-detent mark on the bipolar knob — the unity/0 dB reference.
+   Sits at the midpoint of the sweep (215deg + 125deg = 340deg); the
+   transform-origin is the circle centre, half of the 118px knob. */
+.knob-unit--bipolar .knob-ticks::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 2px;
+    height: 9px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: var(--text-2);
+    transform-origin: 50% 59px;
+    transform: rotate(340deg);
+}
+
+/* machined centre cap */
+.knob-body {
+    position: relative;
+    z-index: 2;
+    width: 86px;
+    height: 86px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.12), transparent 58%),
+        radial-gradient(circle at 50% 18%, var(--surface-3) 0%, var(--bg-deep) 80%);
+    border: 1px solid var(--line-strong);
+    box-shadow: inset 0 3px 14px rgba(0, 0, 0, 0.85), 0 2px 10px rgba(0, 0, 0, 0.5);
+    transform: rotate(var(--angle, 0deg));
+    transition: box-shadow var(--t);
+}
+
+.knob-unit:focus-visible .knob-body {
+    box-shadow: inset 0 3px 14px rgba(0, 0, 0, 0.85), 0 0 0 2px var(--accent-glow);
+}
+
+/* index line pointing at the current value */
+.knob-pointer {
+    position: absolute;
+    left: 50%;
+    top: 7px;
+    width: 2px;
+    height: 22px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: linear-gradient(var(--accent-hi), var(--accent));
+    box-shadow: 0 0 9px var(--accent-glow);
+}
+
+.knob-unit.is-hot .knob-pointer {
+    background: linear-gradient(#fff, var(--m-red));
+    box-shadow: 0 0 10px rgba(231, 34, 46, 0.6);
+}
+
+.knob-readout {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    margin-top: 10px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.knob-value {
+    font-size: 1.18rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #fff;
+    letter-spacing: -0.02em;
+    text-shadow: 0 0 16px var(--accent-glow);
+    font-variant-numeric: tabular-nums;
+}
+
+.knob-unit.is-hot .knob-value {
+    text-shadow: 0 0 18px rgba(231, 34, 46, 0.55);
+}
+
+.knob-unit-label {
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    color: var(--text-3);
+}
+
+.knob-caption {
+    margin-top: 7px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-2);
+}
+
+/* ==================== INSTRUMENT STACK ====================
+   Sits between the two knobs. Driven by ampStage() in script.js, a
+   line-for-line mirror of the server's computeStage(), so a knob drag
+   updates at frame rate without a request per pixel. The mirror is
+   verified against /api/music/stage on load — if the two ever disagree
+   the meters would be lying about the audio, so that check matters.
+   ========================================================= */
+.amp-instruments {
+    flex: 1 1 240px;
+    min-width: 215px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding: 11px 13px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-deep);
+    box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+
+.amp-meter-head,
+.amp-crystal-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.amp-meter-label,
+.amp-crystal-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.53rem;
+    font-weight: 600;
+    letter-spacing: 0.17em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+.amp-meter-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+}
+
+.amp-meter-val b {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 14px var(--accent-glow);
+}
+
+.amp-meter-val i {
+    font-style: normal;
+    letter-spacing: 0.06em;
+}
+
+/* ---- segmented LED ladder ----
+   One element, no 40 child divs: a green→amber→red gradient revealed by
+   --lvl, then chopped into segments by a repeating mask. The unlit
+   remainder shows as recessed ghost segments underneath. */
+.amp-ladder {
+    --lvl: 10%;
+    position: relative;
+    height: 13px;
+    border-radius: 2px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    overflow: hidden;
+    -webkit-mask: repeating-linear-gradient(90deg, #000 0 3px, transparent 3px 5px);
+    mask: repeating-linear-gradient(90deg, #000 0 3px, transparent 3px 5px);
+}
+
+.amp-ladder::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--surface-hi);
+    opacity: 0.55;
+}
+
+.amp-ladder::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: var(--lvl);
+    background: linear-gradient(90deg,
+            var(--accent-deep) 0%,
+            var(--accent) 42%,
+            var(--accent-hi) 62%,
+            var(--warn) 82%,
+            var(--m-red) 100%);
+    background-size: 100vw 100%;
+    box-shadow: 0 0 12px var(--accent-glow);
+    transition: width var(--t);
+}
+
+/* past ~85% of Lavalink's ceiling the ladder reads as redlined */
+.amp-ladder.is-hot::after {
+    box-shadow: 0 0 14px rgba(231, 34, 46, 0.6);
+}
+
+/* pinned at the 1000 wall — further gain does nothing, so say so loudly */
+.amp-ladder.is-clip::after {
+    background: linear-gradient(90deg, var(--accent) 0%, var(--warn) 55%, var(--m-red) 100%);
+    animation: amp-clip 0.85s var(--ease) infinite;
+}
+
+@keyframes amp-clip {
+
+    0%,
+    100% {
+        box-shadow: 0 0 10px rgba(231, 34, 46, 0.45);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(231, 34, 46, 0.95);
+    }
+}
+
+/* the status lamp goes red while pinned, whatever the plugin state */
+.amp-status.is-ceiling {
+    border-color: rgba(231, 34, 46, 0.45);
+    color: var(--m-red);
+}
+
+.amp-status.is-ceiling .amp-status-led {
+    background: var(--m-red);
+    box-shadow: 0 0 10px rgba(231, 34, 46, 0.8);
+    animation: amp-pulse 0.85s var(--ease) infinite;
+}
+
+.amp-over {
+    color: var(--m-red);
+}
+
+.amp-meter-foot {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.47rem;
+    letter-spacing: 0.1em;
+    color: var(--text-3);
+    opacity: 0.72;
+}
+
+/* ---- three-up numeric readouts ---- */
+.amp-readouts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.amp-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 7px 8px;
+    background: var(--surface);
+}
+
+.amp-cell-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.46rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+.amp-cell-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.amp-cell-val i {
+    font-style: normal;
+    font-size: 0.55rem;
+    font-weight: 500;
+    color: var(--text-3);
+    margin-left: 1px;
+}
+
+/* headroom turns amber then red as it runs out */
+.amp-cell-val.is-warn {
+    color: var(--warn);
+}
+
+.amp-cell-val.is-crit {
+    color: var(--m-red);
+    text-shadow: 0 0 12px rgba(231, 34, 46, 0.45);
+}
+
+/* live clarity indicator — tracks the progressive EQ on the output knob */
+.amp-crystal {
+    margin-top: 1px;
+}
+
+.amp-crystal-pct {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--accent-hi);
+    font-variant-numeric: tabular-nums;
+}
+
+.knob-crystal-bar {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--surface-hi);
+    overflow: hidden;
+}
+
+.knob-crystal-bar i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    display: block;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent-deep), var(--accent-hi));
+    box-shadow: 0 0 8px var(--accent-glow);
+    transition: width var(--t);
+}
+
+/* ==================== FOOT: PRESETS + HINT ==================== */
+.amp-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 13px;
+    padding-top: 11px;
+    border-top: 1px solid var(--line);
+}
+
+.amp-presets {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.amp-preset {
+    padding: 6px 13px;
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    background: var(--surface-3);
+    color: var(--text-2);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color var(--t), border-color var(--t), background var(--t), box-shadow var(--t);
+}
+
+.amp-preset:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    background: var(--surface-hi);
+}
+
+.amp-preset.is-on {
+    color: #fff;
+    border-color: var(--accent);
+    background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+    box-shadow: 0 0 14px var(--accent-glow);
+}
+
+.amp-preset--max:hover {
+    border-color: var(--m-red);
+}
+
+.amp-preset--max.is-on {
+    border-color: var(--m-red);
+    background: linear-gradient(180deg, var(--m-red), #8E1219);
+    box-shadow: 0 0 14px rgba(231, 34, 46, 0.45);
+}
+
+.amp-preset:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+/* Active EQ voicing. These buttons are plain .btn elsewhere in the panel, so
+   this only marks which one is currently applied — previously nothing did,
+   and an applied filter was invisible once the toast faded. */
+.filter-btn.is-on,
+.custom-audio-filter-btn.is-on {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 12px var(--accent-glow);
+}
+
+.knob-hint {
+    font-size: 0.56rem;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+}
+
+/* ==================== BASS FADER ====================
+   Vertical sibling of .knob-unit — same width, same readout and caption
+   blocks, same accent tokens, so it themes with the rest of the deck for
+   free (every palette below :root only redefines --accent*, and this
+   never hardcodes a colour).
+
+   INVERTED TRAVEL. --t-ui is the visual position of the thumb, 0 at the
+   bottom of the slot and 1 at the top. Because the top of the throw is
+   maximum cut, --t-ui is (1 - value_travel): script.js owns that
+   inversion so the DOM and the CSS never disagree about which way is up.
+   ==================================================== */
+.fader-unit {
+    --t-ui: 0.5;
+    --slot-h: 118px;
+    --thumb-h: 22px;
+    position: relative;
+    width: 92px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    outline: none;
+}
+
+.fader {
+    position: relative;
+    width: 46px;
+    height: var(--slot-h);
+    display: grid;
+    place-items: center;
+    cursor: grab;
+    touch-action: none;
+}
+
+.fader-unit.is-active .fader {
+    cursor: grabbing;
+}
+
+/* machined channel the thumb rides in */
+.fader-slot {
+    position: relative;
+    width: 12px;
+    height: 100%;
+    border-radius: 6px;
+    background: linear-gradient(var(--bg-deep), var(--surface-3));
+    border: 1px solid var(--line-strong);
+    box-shadow: inset 0 2px 9px rgba(0, 0, 0, 0.85);
+    overflow: hidden;
+}
+
+/* hairline ticks, matching the knob ring's cadence */
+.fader-ticks {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(to bottom,
+            rgba(255, 255, 255, 0.22) 0px 1px,
+            transparent 1px 11px);
+    opacity: 0.55;
+}
+
+/* Lit travel, drawn from the centre detent outward — the same
+   fills-from-unity language as .knob-unit--bipolar. Cut and boost are
+   distinguished by direction, not by colour, so a red "cut" fill cannot
+   be mistaken for the is-hot clip warning on the knobs.
+
+   --fill-top / --fill-h are resolved in script.js rather than with CSS
+   abs()/min(), which are too new to rely on in a packaged Electron
+   runtime — an unsupported clamp there would silently draw a fill of
+   the wrong length instead of failing loudly. */
+.fader-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--fill-top, 50%);
+    height: var(--fill-h, 0%);
+    background: linear-gradient(var(--accent-hi), var(--accent) 55%, var(--accent-deep));
+    opacity: 0.9;
+    transition: opacity var(--t);
+}
+
+.fader-unit:hover .fader-fill,
+.fader-unit:focus-visible .fader-fill {
+    opacity: 1;
+}
+
+/* 0 dB reference, twin of .knob-unit--bipolar .knob-ticks::after.
+   --zero-pct is resolved in script.js on the same inset track the thumb
+   rides, because the range is asymmetric (-12..+6) AND the cap centre can
+   only reach half a thumb from each end. Hardcoding 50% here, or even
+   deriving it from the range alone, prints the line a few px off the cap
+   it is supposed to annotate. */
+.fader-detent {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--zero-pct, 50%);
+    height: 2px;
+    margin-top: -1px;
+    background: var(--text-2);
+    opacity: 0.75;
+}
+
+/* the cap you actually grab */
+.fader-thumb {
+    position: absolute;
+    left: 50%;
+    width: 34px;
+    height: var(--thumb-h);
+    margin-left: -17px;
+    /* thumb centre tracks --t-ui across the usable travel */
+    top: calc((100% - var(--thumb-h)) * (1 - var(--t-ui)));
+    border-radius: 3px;
+    background:
+        linear-gradient(rgba(255, 255, 255, 0.14), transparent 42%),
+        linear-gradient(var(--surface-3), var(--bg-deep));
+    border: 1px solid var(--line-strong);
+    box-shadow: 0 2px 9px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    display: grid;
+    place-items: center;
+    transition: box-shadow var(--t);
+}
+
+.fader-unit:focus-visible .fader-thumb {
+    box-shadow: 0 2px 9px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--accent-glow);
+}
+
+/* index line, mirroring .knob-pointer */
+.fader-thumb-line {
+    width: 20px;
+    height: 2px;
+    border-radius: 1px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-hi), var(--accent));
+    box-shadow: 0 0 9px var(--accent-glow);
+}
+
+.fader-unit.is-hot .fader-thumb-line {
+    background: linear-gradient(90deg, var(--m-red), #fff, var(--m-red));
+    box-shadow: 0 0 10px rgba(231, 34, 46, 0.6);
+}
+
+.fader-unit.is-hot .knob-value {
+    text-shadow: 0 0 18px rgba(231, 34, 46, 0.55);
+}
+
+/* Printed scale. Order reads -12 / 0 / +6 top-to-bottom because the throw
+   is inverted — the numbers ARE the affordance that says so.
+
+   Each label is placed by script.js from its own data-db, NOT by
+   space-between. The range is asymmetric and the cap centre rides an inset
+   track, so "the middle label at the middle of the box" is simply a
+   different place from where 0 dB actually is — it measured 16px out. */
+.fader-scale {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    margin-left: 26px;
+    height: var(--slot-h);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.55rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    pointer-events: none;
+}
+
+.fader-scale span {
+    position: absolute;
+    left: 0;
+    /* top comes from script.js; the shift centres the glyph on that mark */
+    transform: translateY(-50%);
+    white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+    .fader-unit {
+        width: 108px;
+    }
+}
+
+/* knurled grip ring on the centre cap — machined-metal read */
+.knob-grip {
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: repeating-conic-gradient(from 0deg,
+            rgba(255, 255, 255, 0.055) 0deg 2.6deg,
+            transparent 2.6deg 7.2deg);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 7px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 7px));
+    pointer-events: none;
+}
+
+@media (max-width: 1100px) {
+    .knob-bay {
+        gap: 18px;
+        justify-content: center;
+    }
+
+    .amp-instruments {
+        order: 3;
+        flex-basis: 100%;
+    }
+}
+
+@media (max-width: 560px) {
+    .amp-chain {
+        gap: 4px 0;
+    }
+
+    .amp-foot {
+        justify-content: center;
+    }
+}
+
+
+/* ==================== FLEET COHERENCE SCOPE ====================
+   Every unit is its own Lavalink player free-running on its own clock.
+   Aligned, they sum coherently (+20·log10 N); drifted, they sum like
+   uncorrelated noise (+10·log10 N) with smeared transients. So this
+   panel is a level instrument as much as a timing one — the bars are
+   signed distance behind the leader, scaled to the worst offender.
+   =============================================================== */
+.deck-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.deck-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.deck-switch-track {
+    position: relative;
+    width: 30px;
+    height: 15px;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    background: var(--bg-deep);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+    transition: background var(--t), border-color var(--t), box-shadow var(--t);
+    flex-shrink: 0;
+}
+
+.deck-switch-thumb {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, var(--surface-hi), var(--surface-2));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+    transition: transform var(--t), background var(--t);
+}
+
+.deck-switch input:checked+.deck-switch-track {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 26%, var(--bg-deep));
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 8px var(--accent-glow);
+}
+
+.deck-switch input:checked+.deck-switch-track .deck-switch-thumb {
+    transform: translateX(15px);
+    background: linear-gradient(180deg, var(--accent-hi), var(--accent));
+}
+
+.deck-switch input:focus-visible+.deck-switch-track {
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.deck-switch-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.52rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    transition: color var(--t);
+}
+
+.deck-switch input:checked~.deck-switch-label {
+    color: var(--accent-hi);
+}
+
+.scope-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 1px;
+    margin-bottom: 11px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--line);
+    overflow: hidden;
+}
+
+.scope-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 11px;
+    background: var(--surface-2);
+    min-width: 0;
+}
+
+.scope-stat-label {
+    font-size: 0.5rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+.scope-stat-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    transition: color var(--t);
+}
+
+.scope-stat-val.is-good {
+    color: var(--ok);
+}
+
+.scope-stat-val.is-warn {
+    color: var(--warn);
+}
+
+.scope-stat-val.is-crit {
+    color: var(--alert);
+}
+
+.scope-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: 190px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--line);
+}
+
+.scope-rows::-webkit-scrollbar {
+    width: 6px;
+}
+
+.scope-rows::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border-radius: 3px;
+}
+
+.scope-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) minmax(60px, 130px) 62px;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 11px;
+    background: var(--surface-2);
+    font-size: 0.6rem;
+    transition: background var(--t);
+}
+
+.scope-row:hover {
+    background: var(--surface-3);
+}
+
+.scope-row-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.56rem;
+    font-weight: 700;
+    color: var(--text-3);
+}
+
+.scope-row-track {
+    color: var(--text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+/* Distance behind the leader. Zero-width bar == the leader itself. */
+.scope-row-bar {
+    position: relative;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--bg-deep);
+    box-shadow: inset 0 0 0 1px var(--line);
+    overflow: hidden;
+}
+
+.scope-row-bar i {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    border-radius: 2px;
+    background: var(--text-3);
+    transition: width 0.3s var(--ease), background var(--t);
+}
+
+.scope-row-off {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.56rem;
+    font-weight: 600;
+    text-align: right;
+    color: var(--text-3);
+    white-space: nowrap;
+}
+
+.scope-row.is-lock .scope-row-bar i {
+    background: var(--ok);
+}
+
+.scope-row.is-lock .scope-row-off {
+    color: var(--ok);
+}
+
+.scope-row.is-drift .scope-row-bar i {
+    background: var(--warn);
+    box-shadow: 0 0 6px rgba(232, 163, 61, 0.45);
+}
+
+.scope-row.is-drift .scope-row-off {
+    color: var(--warn);
+}
+
+.scope-row.is-paused,
+.scope-row.is-unknown {
+    opacity: 0.5;
+}
+
+.scope-empty {
+    padding: 18px 12px;
+    background: var(--surface-2);
+    text-align: center;
+    font-size: 0.6rem;
+    letter-spacing: 0.05em;
+    color: var(--text-3);
+}
+
+.scope-foot {
+    margin-top: 9px;
+    font-size: 0.53rem;
+    line-height: 1.5;
+    letter-spacing: 0.04em;
+    color: var(--text-3);
+}
+
+@media (max-width: 560px) {
+    .scope-row {
+        grid-template-columns: 30px minmax(0, 1fr) 56px;
+    }
+
+    .scope-row-bar {
+        display: none;
+    }
+}
+
+/* ============================ PANELS ============================ */
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+    gap: 20px;
+    align-items: start;
+}
+
+.card {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.018) 0%, transparent 30%),
+        var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    transition: border-color var(--t), box-shadow var(--t), transform 0.24s var(--ease);
+}
+
+.card:hover {
+    border-color: var(--line-strong);
+    box-shadow: 0 14px 40px -12px rgba(0, 0, 0, 0.6), 0 0 40px -28px var(--accent-glow);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 17px 24px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line);
+    position: relative;
+}
+
+.card-header::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent);
+}
+
+.card-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
+.card-header h2 i {
+    font-size: 0.88rem;
+    color: var(--accent);
+}
+
+.card-header .small {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.78rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-3);
+}
+
+.card-body {
+    padding: 24px;
+}
+
+.counter-chip {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 7px 14px;
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.counter-chip span:first-child {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--accent-hi);
+}
+
+.counter-chip span:last-child {
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+/* Divider used between control blocks */
+.divider {
+    height: 1px;
+    background: var(--line);
+    margin: 24px 0;
+}
+
+.block-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 12px;
+}
+
+.block-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+}
+
+/* ============================ FORMS ============================ */
+
+.input-group {
+    margin-bottom: 18px;
+}
+
+.input-group:last-child {
+    margin-bottom: 0;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="password"],
+select,
+textarea {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: border-color var(--t), background var(--t), box-shadow var(--t);
+}
+
+input[type="number"] {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+textarea {
+    resize: vertical;
+    min-height: 84px;
+    line-height: 1.6;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: #4A5058;
+    font-weight: 400;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: #06090D;
+    box-shadow: 0 0 0 3px var(--accent-glow), 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='square' stroke-width='2' d='M6 9l6 6 6-6'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 38px;
+}
+
+select option {
+    background: var(--surface-2);
+    color: var(--text);
+}
+
+/* Range / timeline */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--surface-hi);
+    border-radius: 0;
+    cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 4px;
+    height: 18px;
+    background: var(--accent-hi);
+    border: none;
+    border-radius: 1px;
+    box-shadow: 0 0 10px var(--accent-a70);
+}
+
+input[type="range"]::-moz-range-thumb {
+    width: 4px;
+    height: 18px;
+    background: var(--accent-hi);
+    border: none;
+    border-radius: 1px;
+}
+
+.profile-input-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.btn-group {
+    display: flex;
+    gap: 8px;
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Sync explainer — sits under the transport row. The tint is mixed from
+   --accent rather than hardcoded, so it follows the theme switcher like the
+   rest of the panel instead of staying blue in the red/amber themes. */
+.sync-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-left: 2px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+    border-radius: var(--radius);
+    color: var(--text-2);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.sync-hint i {
+    color: var(--accent);
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+/* The button owns a spinner while the fleet is mid-sync; the cursor must not
+   suggest it is still clickable during that window. */
+#sync-music:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* ============================ BUTTONS ============================ */
+
+.btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 11px 20px;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.735rem;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: background var(--t), border-color var(--t), color var(--t), transform 0.1s var(--ease), box-shadow var(--t);
+}
+
+/* Light sweep across buttons on hover */
+.btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -80%;
+    width: 55%;
+    height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+    transform: skewX(-18deg);
+    transition: left 0.55s var(--ease);
+    pointer-events: none;
+}
+
+.btn:hover:not(:disabled)::after {
+    left: 130%;
+}
+
+.btn i {
+    position: relative;
+    z-index: 1;
+    font-size: 0.82rem;
+}
+
+.btn span,
+.btn kbd,
+.btn .btn-label {
+    position: relative;
+    z-index: 1;
+}
+
+.btn:active {
+    transform: translateY(1px);
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-primary {
+    background: var(--accent-deep);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--accent);
+    box-shadow: 0 0 18px var(--accent-a30);
+}
+
+.btn-success {
+    background: rgba(61, 190, 124, 0.12);
+    border-color: rgba(61, 190, 124, 0.5);
+    color: #6BE0A5;
+}
+
+.btn-success:hover:not(:disabled) {
+    background: rgba(61, 190, 124, 0.22);
+    border-color: var(--ok);
+    box-shadow: 0 0 18px rgba(61, 190, 124, 0.22);
+}
+
+.btn-danger {
+    background: rgba(231, 34, 46, 0.12);
+    border-color: rgba(231, 34, 46, 0.5);
+    color: #FF6B74;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: rgba(231, 34, 46, 0.24);
+    border-color: var(--alert);
+    box-shadow: 0 0 18px rgba(231, 34, 46, 0.26);
+}
+
+.btn-warning {
+    background: rgba(232, 163, 61, 0.12);
+    border-color: rgba(232, 163, 61, 0.5);
+    color: #FFC46B;
+}
+
+.btn-warning:hover:not(:disabled) {
+    background: rgba(232, 163, 61, 0.22);
+    border-color: var(--warn);
+}
+
+.btn-info {
+    background: var(--accent-a10);
+    border-color: var(--accent-a45);
+    color: var(--accent-hi);
+}
+
+.btn-info:hover:not(:disabled) {
+    background: var(--accent-a20);
+    border-color: var(--accent);
+}
+
+.btn-secondary {
+    background: var(--surface-2);
+    border-color: var(--line-strong);
+    color: var(--text-2);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--surface-3);
+    border-color: rgba(255, 255, 255, 0.24);
+    color: var(--text);
+}
+
+.btn-sm {
+    padding: 8px 14px;
+    font-size: 0.665rem;
+    letter-spacing: 0.1em;
+}
+
+.btn-block {
+    width: 100%;
+}
+
+.btn kbd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    padding: 2px 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    letter-spacing: 0;
+}
+
+/* Toggle-on state (script.js adds .active-btn) */
+.active-btn {
+    background: rgba(61, 190, 124, 0.2) !important;
+    border-color: var(--ok) !important;
+    color: #6BE0A5 !important;
+}
+
+/* --------- Ignition console: START / STOP / SYNC --------- */
+
+.ignition-console {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+}
+
+.btn-hero {
+    position: relative;
+    flex-direction: column;
+    gap: 10px;
+    padding: 26px 22px 22px;
+    font-size: 0.82rem;
+    letter-spacing: 0.18em;
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.btn-hero i {
+    font-size: 1.5rem;
+}
+
+.btn-hero::after {
+    content: attr(data-sub);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    opacity: 0.55;
+}
+
+.btn-hero::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: currentColor;
+    opacity: 0.7;
+}
+
+#start-all.btn-hero {
+    background: linear-gradient(180deg, rgba(61, 190, 124, 0.14) 0%, rgba(61, 190, 124, 0.04) 100%);
+}
+
+#stop-all.btn-hero {
+    background: linear-gradient(180deg, rgba(231, 34, 46, 0.14) 0%, rgba(231, 34, 46, 0.04) 100%);
+}
+
+/* ---------------- Telemetry strip ---------------- */
+
+.telemetry-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: 26px;
+    overflow: hidden;
+}
+
+.telemetry-cell {
+    background: var(--surface);
+    padding: 15px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.telemetry-cell .t-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.57rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+.telemetry-cell .t-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.telemetry-cell .t-value i {
+    font-size: 0.72rem;
+    color: var(--accent);
+}
+
+/* ========================= CHECKBOXES ========================= */
+
+.checkbox-container {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    padding: 9px 14px 9px 36px;
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.79rem;
+    font-weight: 500;
+    color: var(--text-2);
+    user-select: none;
+    transition: border-color var(--t), color var(--t), background var(--t);
+}
+
+.checkbox-container:hover {
+    border-color: var(--line-strong);
+    color: var(--text);
+}
+
+.checkbox-container input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.checkmark {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    background: #04060A;
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    transition: background var(--t), border-color var(--t);
+}
+
+.checkmark::after {
+    content: '';
+    position: absolute;
+    display: none;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.checkbox-container input:checked ~ .checkmark {
+    background: var(--accent);
+    border-color: var(--accent-hi);
+}
+
+.checkbox-container input:checked ~ .checkmark::after {
+    display: block;
+}
+
+.checkbox-container:has(input:checked) {
+    border-color: var(--accent-a45);
+    color: var(--text);
+    background: var(--accent-a06);
+}
+
+/* ===================== DRIVE MODE SELECTOR ===================== */
+
+.join-speed-selector {
+    display: inline-flex;
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 3px;
+    gap: 3px;
+}
+
+.speed-option {
+    padding: 9px 18px;
+    border-radius: 2px;
+    cursor: pointer;
+    user-select: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.63rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    transition: background var(--t), color var(--t);
+}
+
+.speed-option:not(.active):hover {
+    color: var(--text-2);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.speed-option.active {
+    background: var(--accent-deep);
+    color: #fff;
+    box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+#vc-speed-selector .speed-option[data-speed="fast"].active {
+    background: rgba(231, 34, 46, 0.9);
+    box-shadow: inset 0 0 0 1px #FF6B74;
+}
+
+/* ====================== TOKEN GRID / LISTS ====================== */
+
+#global-tokens-container {
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 8px;
+    max-height: 440px;
+    overflow-y: auto;
+}
+
+.token-checkbox-item {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px 12px 10px 34px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: border-color var(--t), background var(--t);
+}
+
+.token-checkbox-item .checkmark {
+    left: 11px;
+}
+
+.token-checkbox-item:hover {
+    border-color: var(--accent-a45);
+    background: var(--surface-3);
+}
+
+#vc-list-container {
+    max-height: 230px;
+    overflow-y: auto;
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px;
+}
+
+.vc-list-item {
+    border-radius: var(--radius) !important;
+    background: var(--surface-2) !important;
+    border-color: var(--line) !important;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 26px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+/* ===================== NOW PLAYING / TIMELINE ===================== */
+
+#timeline-container {
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+}
+
+.timeline-times {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-3);
+    margin-bottom: 10px;
+}
+
+#now-playing-text {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 0.83rem;
+    font-weight: 600;
+    color: var(--accent-hi);
+    letter-spacing: 0.01em;
+}
+
+/* ========================== TERMINAL ========================== */
+
+.terminal-container {
+    background: #04060A;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    height: calc(100vh - 260px);
+    min-height: 380px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.775rem;
+    line-height: 1.75;
+    color: var(--text-2);
+    box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.9);
+}
+
+.log-entry {
+    word-break: break-word;
+    padding-left: 12px;
+    border-left: 2px solid transparent;
+}
+
+.log-entry.system {
+    color: var(--accent-hi);
+    border-left-color: var(--accent-a45);
+}
+
+.log-entry.error {
+    color: #FF6B74;
+    border-left-color: rgba(231, 34, 46, 0.55);
+}
+
+.log-entry.success {
+    color: #6BE0A5;
+    border-left-color: rgba(61, 190, 124, 0.45);
+}
+
+/* =========================== TOASTS =========================== */
+
+#toast-container {
+    position: fixed;
+    top: 22px;
+    right: 22px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast-pill {
+    pointer-events: auto;
+    min-width: 330px;
+    max-width: 420px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 18px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 500;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+    animation: toastIn 0.28s var(--ease) forwards;
+}
+
+.toast-pill i {
+    font-size: 0.9rem;
+    color: var(--accent);
+}
+
+.toast-pill.toast-success { border-left-color: var(--ok); }
+.toast-pill.toast-success i { color: var(--ok); }
+.toast-pill.toast-danger { border-left-color: var(--alert); }
+.toast-pill.toast-danger i { color: #FF6B74; }
+.toast-pill.toast-warning { border-left-color: var(--warn); }
+.toast-pill.toast-warning i { color: var(--warn); }
+
+.toast-pill.toast-out {
+    animation: toastOut 0.24s var(--ease) forwards;
+}
+
+@keyframes toastIn {
+    from { opacity: 0; transform: translateX(24px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(24px); }
+}
+
+/* ====================== COMMAND PALETTE ====================== */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 13vh;
+    background: rgba(4, 5, 7, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s var(--ease);
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.command-palette-card {
+    width: 620px;
+    max-width: 92vw;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: 0 40px 90px rgba(0, 0, 0, 0.85);
+    transform: translateY(-10px);
+    transition: transform 0.24s var(--ease);
+    position: relative;
+}
+
+.command-palette-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+            var(--m-light) 0 33.33%,
+            var(--m-blue) 33.33% 66.66%,
+            var(--m-red) 66.66% 100%);
+}
+
+.modal-overlay.active .command-palette-card {
+    transform: translateY(0);
+}
+
+.palette-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--line);
+}
+
+.palette-input-wrapper > i {
+    font-size: 0.95rem;
+    color: var(--accent);
+}
+
+.palette-input-wrapper input {
+    flex: 1;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.palette-hint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    padding: 4px 8px;
+    background: var(--surface-3);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    color: var(--text-3);
+    white-space: nowrap;
+}
+
+.palette-results {
+    max-height: 380px;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.palette-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 14px;
+    border-radius: var(--radius);
+    border-left: 2px solid transparent;
+    cursor: pointer;
+    color: var(--text-2);
+    font-size: 0.83rem;
+    transition: background var(--t), color var(--t), border-color var(--t);
+}
+
+.palette-item i {
+    color: var(--text-3);
+}
+
+.palette-item:hover,
+.palette-item.selected {
+    background: var(--accent-a10);
+    border-left-color: var(--accent);
+    color: #fff;
+}
+
+.palette-item:hover i,
+.palette-item.selected i {
+    color: var(--accent-hi);
+}
+
+/* ====================== THEME PICKER ====================== */
+
+.theme-picker-card {
+    width: 740px;
+    max-width: 92vw;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: 0 50px 100px rgba(0, 0, 0, 0.9);
+    transform: translateY(-12px);
+    transition: transform 0.26s var(--ease);
+    position: relative;
+}
+
+.theme-picker-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg,
+            var(--m-light) 0 33.33%,
+            var(--m-blue) 33.33% 66.66%,
+            var(--m-red) 66.66% 100%);
+}
+
+.modal-overlay.active .theme-picker-card {
+    transform: translateY(0);
+}
+
+.theme-picker-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 22px 26px 18px;
+    border-bottom: 1px solid var(--line);
+}
+
+.theme-picker-header .kicker {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 7px;
+}
+
+.theme-picker-header h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.024em;
+    color: var(--text);
+}
+
+.theme-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    padding: 20px;
+    max-height: 520px;
+    overflow-y: auto;
+}
+
+.theme-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background var(--t), border-color var(--t), transform 0.18s var(--ease);
+    user-select: none;
+}
+
+.theme-card:hover {
+    background: var(--surface-3);
+    border-color: var(--line-strong);
+    transform: translateY(-2px);
+}
+
+.theme-card.selected {
+    background: linear-gradient(135deg, var(--accent-a10) 0%, transparent 70%),
+                var(--surface-3);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.theme-swatch {
+    display: flex;
+    gap: 2px;
+    width: 100%;
+    height: 44px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+.theme-swatch span {
+    flex: 1;
+}
+
+.theme-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-2);
+    text-align: center;
+    transition: color var(--t);
+}
+
+.theme-card.selected .theme-name {
+    color: var(--text);
+}
+
+.theme-check {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 20px;
+    height: 20px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 0.68rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.theme-card.selected .theme-check {
+    display: flex;
+    animation: checkPop 0.32s var(--ease);
+}
+
+@keyframes checkPop {
+    0% { transform: scale(0); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+
+
+/* ========================== UTILITIES ========================== */
+
+.mt-5 { margin-top: 6px; }
+.mt-10 { margin-top: 10px; }
+.mt-15 { margin-top: 16px; }
+.mt-20 { margin-top: 22px; }
+.ml-10 { margin-left: 8px; }
+.text-muted { color: var(--text-2); }
+.small { font-size: 0.8rem; }
+
+.result-readout {
+    display: flex;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.result-readout > span {
+    flex: 1;
+    background: var(--bg-deep);
+    padding: 14px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* ====================== TOKEN MANAGER ====================== */
+
+.token-manager-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 560px;
+    overflow-y: auto;
+}
+
+.token-manage-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 16px;
+    background: var(--bg-deep);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    transition: border-color var(--t), background var(--t), transform 0.16s var(--ease);
+}
+
+.token-manage-item:hover {
+    border-color: var(--line-strong);
+    background: var(--surface-2);
+    transform: translateX(2px);
+}
+
+.tm-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.tm-dot.on {
+    background: var(--ok);
+    box-shadow: 0 0 10px var(--ok), 0 0 0 3px rgba(61, 190, 124, 0.14);
+}
+
+.tm-dot.off {
+    background: #3A414B;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.tm-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.tm-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tm-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tm-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--text-2);
+    padding: 4px 9px;
+    background: var(--surface-3);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.tm-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.tm-actions .btn {
+    padding: 8px 11px;
+}
+
+.tm-actions .btn i {
+    font-size: 0.78rem;
+}
+
+/* Add-result lines */
+.tm-result-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    margin-bottom: 5px;
+    border-radius: var(--radius);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    border-left: 2px solid transparent;
+}
+
+.tm-result-line.ok {
+    background: rgba(61, 190, 124, 0.08);
+    border-left-color: var(--ok);
+    color: #8FE7BC;
+}
+
+.tm-result-line.bad {
+    background: rgba(231, 34, 46, 0.08);
+    border-left-color: var(--alert);
+    color: #FF9098;
+}
+
+.tm-result-line span:nth-child(2) {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tm-result-msg {
+    opacity: 0.75;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.62rem;
+}
+
+/* ========================= RESPONSIVE ========================= */
+
+@media (max-width: 1100px) {
+    .card-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 900px) {
+    body {
+        overflow: auto;
+    }
+
+    .app-container {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .sidebar::after {
+        display: none;
+    }
+
+    .nav-links {
+        display: flex;
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 8px;
+        gap: 4px;
+    }
+
+    .nav-group-label {
+        display: none;
+    }
+
+    .nav-links li[data-tab] {
+        border-left: none;
+        border-bottom: 2px solid transparent;
+        padding: 10px 14px;
+        white-space: nowrap;
+    }
+
+    .nav-links li[data-tab].active {
+        border-left: none;
+        border-bottom-color: var(--accent);
+        background: var(--accent-a10);
+    }
+
+    .nav-links li[data-tab].active::after {
+        display: none;
+    }
+
+    .sidebar-footer {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .build-stamp {
+        margin-top: 0;
+    }
+
+    .tab-header {
+        position: static;
+        padding: 22px 20px 18px;
+    }
+
+    .section-body {
+        padding: 22px 20px 48px;
+    }
+
+    .terminal-container {
+        height: 60vh;
+    }
+}
+
+
+/* ============================================================
+   COCKPIT REFINEMENT LAYER
+   ------------------------------------------------------------
+   Appended last on purpose. Everything here either fills a gap
+   the sheet above never covered (focus, motion, scrollbars,
+   small viewports) or sharpens an interaction that already
+   worked but did not feel machined. Nothing above is rewritten,
+   so a livery, a gauge or a knob keeps behaving exactly as it
+   did — this layer only adds the finish.
+   ============================================================ */
+
+/* ---------- 1. Keyboard focus ----------------------------------------------
+   The sheet had focus rings on four controls out of several hundred, so
+   tabbing through the dashboard was invisible — you could not tell what was
+   about to be activated. One ring, derived from --accent, applied to anything
+   focusable, and only for keyboard focus so a mouse click never draws it. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+.theme-card:focus-visible,
+.palette-item:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: var(--radius);
+    position: relative;
+    z-index: 5;
+}
+
+/* Controls that already draw their own ring further up keep theirs — this
+   layer must not fight them. */
+.knob-unit:focus-visible,
+.amp-preset:focus-visible {
+    box-shadow: none;
+}
+
+/* A focused row inside a scroller would be clipped by its own container, so
+   it gets the tight ring that sits fully inside the element. */
+.nav-links li:focus-visible,
+.scope-row:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring-tight);
+}
+
+/* Skip link — the sidebar is a long nav list, so without this a keyboard user
+   pays for all of it on every load. Off-screen until focused. */
+.skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 1000;
+    padding: 12px 20px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-radius: 0 0 var(--radius) 0;
+}
+
+.skip-link:focus {
+    left: 0;
+}
+
+/* ---------- 2. Scrollbars ---------------------------------------------------
+   The sheet styled none, so every scroller fell back to the OS default: a wide
+   light-grey bar in a black cockpit, and the single loudest thing on screen.
+   Firefox gets the standard property, Chromium the webkit one. */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface-hi) transparent;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--surface-hi);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-deep);
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* ---------- 3. Depth and press feedback ------------------------------------
+   Buttons had hover states but no press state, so a click gave no confirmation
+   until the request came back — on a slow call the interface read as dead. A
+   1px travel is enough to feel mechanical without disturbing the layout. */
+.btn {
+    box-shadow: var(--shadow-1), var(--bevel);
+}
+
+.btn:hover:not(:disabled) {
+    box-shadow: var(--shadow-2), var(--bevel);
+}
+
+.btn:active:not(:disabled) {
+    transform: translateY(1px) scale(0.995);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45);
+    transition-duration: 0.05s;
+}
+
+.btn:disabled {
+    box-shadow: none;
+}
+
+/* A control waiting on the server keeps its spinner at full strength — the
+   disabled dimming applies to the button, not to the evidence that it is
+   still working. */
+.btn:disabled .fa-spin {
+    opacity: 1;
+}
+
+.card {
+    box-shadow: var(--shadow-1), var(--bevel);
+}
+
+.card:hover {
+    box-shadow: var(--shadow-2), var(--bevel), 0 0 40px -28px var(--accent-glow);
+}
+
+.modal-overlay .card,
+.command-palette-card {
+    box-shadow: var(--shadow-3);
+}
+
+/* ---------- 4. Fleet coherence scope ---------------------------------------
+   The offset bars animate their width, which reads as a needle settling rather
+   than a value teleporting — the difference between watching drift close and
+   just seeing two unrelated numbers. */
+.scope-row-bar i {
+    transition: width var(--t-slow), background-color var(--t);
+}
+
+.scope-row {
+    transition: background-color var(--t), border-color var(--t);
+}
+
+/* A locked fleet is the state worth recognising at a glance, so the readouts
+   carry colour as well as a number. */
+.scope-stat-val.is-good {
+    color: var(--ok);
+}
+
+.scope-stat-val.is-warn {
+    color: var(--warn);
+}
+
+.scope-stat-val.is-crit {
+    color: var(--alert);
+}
+
+/* ---------- 5. Toast rail ---------------------------------------------------
+   Toasts sit above the whole interface. Without this they intercept clicks
+   aimed at whatever is underneath them, so the rail is transparent to the
+   pointer and only the pills themselves are not. */
+#toast-container {
+    pointer-events: none;
+}
+
+#toast-container .toast-pill {
+    pointer-events: auto;
+}
+
+/* ---------- 6. Small viewports ----------------------------------------------
+   The sheet stopped at 900px, below which the amplifier deck, the gauges and
+   the scope all overflowed horizontally. These rules do not restyle those
+   components — they only let them reflow. */
+@media (max-width: 900px) {
+    .tab-header {
+        padding: 20px 18px 16px;
+    }
+
+    .tab-header h1 {
+        font-size: 1.35rem;
+    }
+
+    /* Most grids in the sheet are auto-fit and already collapse on their own.
+       These two are the exceptions — fixed column counts that keep their
+       columns no matter how little room is left, so they are the ones that
+       actually overflow. Both become auto-fit rather than a single column:
+       three gauges stacked vertically is as bad as three gauges clipped. */
+    .amp-readouts {
+        grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+    }
+
+    .profile-input-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 620px) {
+    .section-body {
+        padding: 18px 14px 40px;
+    }
+
+    .card-header {
+        padding: 14px 16px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .card-body {
+        padding: 16px;
+    }
+
+    /* Button rows wrap instead of scrolling sideways — a control you have to
+       scroll to reach is a control that gets missed. */
+    .btn-group {
+        flex-wrap: wrap;
+    }
+
+    .btn-group .btn {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    /* The scope drops its bars here: the number is the datum, the bar is the
+       garnish, and squeezing both in makes neither readable. */
+    .scope-row {
+        grid-template-columns: auto 1fr auto;
+    }
+
+    .scope-row-bar {
+        display: none;
+    }
+
+    .toast-pill {
+        max-width: calc(100vw - 24px);
+    }
+}
+
+/* Coarse pointers need a real target size — a 24px hit area designed for a
+   mouse is a miss on a touchscreen. */
+@media (pointer: coarse) {
+
+    .btn,
+    .nav-links li[data-tab],
+    .theme-card,
+    .reveal-btn {
+        min-height: 44px;
+    }
+}
+
+/* ---------- 7. Reduced motion -----------------------------------------------
+   The sheet ran five infinite animations at all times, including an 18s
+   ambient gradient behind the whole page, with no way to stop them. For a user
+   with vestibular sensitivity that is not a preference, it is a reason to
+   close the app. Honour the OS setting: kill the ambient drift and the
+   decorative loops, and collapse transitions to near-instant so state changes
+   stay legible without any travel.
+
+   Urgent indicators (clip, drift alarm) keep their signal — the warning has to
+   survive, its movement does not. */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --t: 0.01ms linear;
+        --t-fast: 0.01ms linear;
+        --t-slow: 0.01ms linear;
+        --motion-scale: 0;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    body::before {
+        animation: none !important;
+    }
+
+    .tab-content.active {
+        animation: none !important;
+    }
+
+    .card:hover,
+    .stat-card:hover {
+        transform: none !important;
+    }
+
+    .btn:active:not(:disabled) {
+        transform: none !important;
+    }
+
+    .scope-stat-val.is-crit {
+        animation: none !important;
+        outline: 1px solid var(--alert);
+    }
+}
+
+/* ---------- 8. Forced colours ----------------------------------------------
+   Windows high-contrast mode replaces the entire palette, which strips the
+   border colours this layout leans on to stay legible. */
+@media (forced-colors: active) {
+
+    .card,
+    .btn,
+    .stat-card,
+    .scope-row {
+        border: 1px solid CanvasText;
+    }
+
+    .btn:focus-visible,
+    .nav-links li:focus-visible {
+        outline: 2px solid Highlight;
+        outline-offset: 2px;
+    }
+}
+
+/* ---------- 9. Print --------------------------------------------------------
+   Printing the dashboard should produce the readout, not the chrome. */
+@media print {
+
+    .sidebar,
+    #toast-container,
+    .modal-overlay,
+    .btn-group {
+        display: none !important;
+    }
+
+    body,
+    .content {
+        background: #fff !important;
+        color: #000 !important;
+    }
+
+    .card {
+        break-inside: avoid;
+        border: 1px solid #999 !important;
+        box-shadow: none !important;
+    }
+}
+
+/* ============================================================
+   LIQUID GLASS  ·  v15
+   ------------------------------------------------------------
+   The cockpit now floats over the M4 GT3 studio plate. Every
+   large surface is re-cut as frosted glass — translucent tint,
+   backdrop blur + saturation, a bright specular top edge and a
+   soft inner shadow — so the car reads *through* the interface
+   instead of behind a wall. Appended last: source order alone
+   wins over the opaque base rules above, so nothing structural
+   is touched and every livery keeps working (the tints derive
+   from the same --surface / --accent tokens).
+   ============================================================ */
+
+:root {
+    /* Glass fills — derived from the surface ramp so liveries repaint them
+       for free. color-mix against `transparent` is just an alpha cut. */
+    --glass-1: color-mix(in srgb, var(--surface) 60%, transparent);
+    --glass-2: color-mix(in srgb, var(--surface-2) 64%, transparent);
+    --glass-3: color-mix(in srgb, var(--surface-3) 70%, transparent);
+    --glass-well: color-mix(in srgb, var(--bg-deep) 52%, transparent);
+    --glass-line: rgba(255, 255, 255, 0.10);
+
+    /* Frost strength */
+    --glass-blur: 20px;
+    --glass-blur-lg: 34px;
+    --glass-sat: 150%;
+
+    /* The specular kit: a bright hairline on the top edge, a faint full
+       outline, and a lifted drop shadow. One token so every pane of glass
+       catches the light the same way. */
+    --glass-edge:
+        inset 0 1px 0 rgba(255, 255, 255, 0.16),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+        0 22px 48px -22px rgba(0, 0, 0, 0.8);
+    --glass-edge-lg:
+        inset 0 1px 0 rgba(255, 255, 255, 0.20),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+        0 40px 90px -30px rgba(0, 0, 0, 0.85);
+
+    /* A diagonal sheen dropped in front of the tint on each pane. */
+    --glass-sheen: linear-gradient(135deg,
+            rgba(255, 255, 255, 0.10) 0%,
+            rgba(255, 255, 255, 0.03) 26%,
+            transparent 55%);
+
+    /* Liquid geometry — softer corners than the instrument base. */
+    --radius-glass: 16px;
+    --radius-glass-sm: 11px;
+}
+
+/* ---------- 1. Backdrop plate + scrim ---------------------------------------
+   The car is a fixed, cover-sized plate on the body, so the content column
+   scrolls *over* it and the frosted panes re-sample fresh regions of the car
+   as you move — the liquid parallax. body::before, already fixed and inert,
+   is promoted from scan-grid to full scrim: a vertical wash for legibility, a
+   vignette to seat the car in its studio, plus the original accent bloom. */
+body {
+    background-image:
+        linear-gradient(180deg, rgba(6, 7, 10, 0.30), rgba(6, 7, 10, 0.30)),
+        url('background.jpg');
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center center;
+    background-attachment: fixed;
+    background-color: var(--bg-deep);
+}
+
+body::before {
+    background:
+        radial-gradient(120% 85% at 50% -8%, var(--accent-glow) 0%, transparent 52%),
+        radial-gradient(130% 100% at 50% 45%, transparent 34%, rgba(4, 5, 8, 0.55) 100%),
+        linear-gradient(180deg, rgba(6, 7, 10, 0.52) 0%, rgba(6, 7, 10, 0.36) 42%, rgba(5, 6, 9, 0.66) 100%);
+}
+
+/* ---------- 2. Shell: let the car through ----------------------------------- */
+.app-container {
+    background: transparent;
+}
+
+/* The content column must be see-through, otherwise the cards would frost
+   over its opaque paint instead of the car. A whisper of accent stays. */
+.content {
+    background:
+        radial-gradient(100% 55% at 50% 0%, var(--accent-a06) 0%, transparent 60%);
+}
+
+/* Sidebar — a full-height slab of dark glass with the M-stripe rail intact. */
+.sidebar {
+    background:
+        var(--glass-sheen),
+        var(--glass-2);
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-sat));
+    border-right: 1px solid var(--glass-line);
+    box-shadow: 1px 0 0 rgba(0, 0, 0, 0.4), inset -1px 0 0 rgba(255, 255, 255, 0.03);
+}
+
+/* Sticky header — deepen the existing frost and float it. */
+.tab-header {
+    background:
+        var(--glass-sheen),
+        color-mix(in srgb, var(--bg) 46%, transparent);
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-sat));
+    border-bottom: 1px solid var(--glass-line);
+}
+
+/* ---------- 3. Cards -------------------------------------------------------- */
+.card {
+    background:
+        var(--glass-sheen),
+        var(--glass-1);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    border: 1px solid var(--glass-line);
+    border-radius: var(--radius-glass);
+    box-shadow: var(--glass-edge);
+}
+
+.card:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow:
+        var(--glass-edge),
+        0 0 46px -26px var(--accent-glow);
+    transform: translateY(-2px);
+}
+
+/* Header rail rides on the glass — translucent so the card reads as one pane. */
+.card-header {
+    background: color-mix(in srgb, var(--surface-2) 42%, transparent);
+    border-bottom: 1px solid var(--glass-line);
+}
+
+/* ---------- 4. Instrument tiles (gauges + telemetry) ------------------------
+   Parent grids become the hairline lattice; each cell is its own frosted
+   tile, so the dividers survive over the bright car. */
+.stats-grid,
+.telemetry-strip {
+    background: var(--glass-line);
+    border: 1px solid var(--glass-line);
+    border-radius: var(--radius-glass);
+}
+
+.stat-card,
+.telemetry-cell {
+    background:
+        var(--glass-sheen),
+        var(--glass-1);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+}
+
+.stat-card:hover {
+    background:
+        var(--glass-sheen),
+        var(--glass-2);
+}
+
+/* ---------- 5. Amplifier deck ----------------------------------------------- */
+.deck {
+    background:
+        var(--glass-sheen),
+        var(--glass-2);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    border: 1px solid var(--glass-line);
+    border-radius: var(--radius-glass);
+    box-shadow: var(--glass-edge);
+}
+
+.deck-panel {
+    background: color-mix(in srgb, var(--surface-2) 40%, transparent);
+}
+
+.deck-panel--scope {
+    background: linear-gradient(180deg,
+            color-mix(in srgb, var(--surface-2) 40%, transparent),
+            color-mix(in srgb, var(--bg-deep) 46%, transparent));
+}
+
+/* ---------- 6. Form wells --------------------------------------------------- */
+input[type="text"],
+input[type="number"],
+input[type="password"],
+select,
+textarea {
+    background: var(--glass-well);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--glass-line);
+    border-radius: var(--radius-glass-sm);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    background: color-mix(in srgb, var(--bg-deep) 66%, transparent);
+    border-color: var(--accent);
+}
+
+.counter-chip,
+#timeline-container {
+    background: var(--glass-well);
+    border: 1px solid var(--glass-line);
+    border-radius: var(--radius-glass-sm);
+}
+
+.checkbox-container {
+    background: var(--glass-well);
+    border: 1px solid var(--glass-line);
+    border-radius: var(--radius-glass-sm);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+}
+
+/* ---------- 7. Buttons ------------------------------------------------------
+   Every button gains a light frost + a specular top edge; the semantic fills
+   stay, but secondary becomes a proper pane of glass. */
+.btn {
+    border-radius: var(--radius-glass-sm);
+    -webkit-backdrop-filter: blur(8px) saturate(140%);
+    backdrop-filter: blur(8px) saturate(140%);
+    box-shadow: var(--shadow-1), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.btn:hover:not(:disabled) {
+    box-shadow: var(--shadow-2), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.btn-secondary {
+    background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+    border-color: var(--glass-line);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--surface-3) 68%, transparent);
+    border-color: rgba(255, 255, 255, 0.24);
+}
+
+.btn-hero {
+    border-radius: var(--radius-glass);
+}
+
+/* ---------- 8. Terminal ----------------------------------------------------- */
+.terminal-container {
+    background: color-mix(in srgb, #04060A 62%, transparent);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(120%);
+    backdrop-filter: blur(var(--glass-blur)) saturate(120%);
+    border: 1px solid var(--glass-line);
+    border-radius: var(--radius-glass);
+}
+
+/* ---------- 9. Floating layers: modals, palette, toasts --------------------- */
+.command-palette-card,
+.theme-picker-card {
+    background:
+        var(--glass-sheen),
+        color-mix(in srgb, var(--surface) 72%, transparent);
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-sat));
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: var(--radius-glass);
+    box-shadow: var(--glass-edge-lg);
+}
+
+.toast-pill {
+    background:
+        var(--glass-sheen),
+        color-mix(in srgb, var(--surface-2) 66%, transparent);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    border: 1px solid var(--glass-line);
+    border-left-width: 3px;
+    border-radius: var(--radius-glass-sm);
+    box-shadow: var(--glass-edge);
+}
+
+.modal-overlay .card {
+    box-shadow: var(--glass-edge-lg);
+}
+
+/* ---------- 10. Accessibility fallbacks -------------------------------------
+   No backdrop-filter (or a user who wants less transparency) → make the panes
+   near-solid so nothing turns to mush over the bright car. */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    :root {
+        --glass-1: color-mix(in srgb, var(--surface) 94%, transparent);
+        --glass-2: color-mix(in srgb, var(--surface-2) 95%, transparent);
+        --glass-3: color-mix(in srgb, var(--surface-3) 96%, transparent);
+        --glass-well: var(--bg-deep);
+    }
+
+    .sidebar,
+    .tab-header {
+        background: var(--surface);
+    }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    :root {
+        --glass-1: color-mix(in srgb, var(--surface) 96%, transparent);
+        --glass-2: color-mix(in srgb, var(--surface-2) 96%, transparent);
+        --glass-3: var(--surface-3);
+        --glass-well: var(--bg-deep);
+    }
+
+    body::before {
+        background:
+            linear-gradient(180deg, rgba(6, 7, 10, 0.9), rgba(5, 6, 9, 0.94));
+    }
+
+    .sidebar,
+    .tab-header,
+    .command-palette-card,
+    .theme-picker-card {
+        background: var(--surface);
+    }
+}
+
+/* ============================================================
+   LIVING GLASS  ·  v16   — motion, light & depth
+   ------------------------------------------------------------
+   v15 made the cockpit frosted; v16 makes it ALIVE. A slow
+   aurora drifts behind the frost so the panes shimmer as
+   colour moves past them, a specular highlight tracks the
+   pointer across every pane (--mx / --my written by a tiny JS
+   module), panels rise in a staggered cascade when a tab
+   opens, the gauges breathe, the scrollbars turn to glass, and
+   a filmic grain kills the blur banding. Everything is
+   livery-aware (derived from --accent) and every scrap of
+   motion / transparency is disabled under the reduced-* media
+   queries at the very bottom. Appended last on purpose.
+   ============================================================ */
+
+:root {
+    /* Pointer specular — the highlight that follows the cursor. */
+    --spot: rgba(255, 255, 255, 0.11);
+    --spot-strong: rgba(255, 255, 255, 0.16);
+    --spot-size: 340px;
+    --mx: 50%;
+    --my: -18%;
+
+    /* Aurora palette — accent-driven so each livery drifts in its own colour. */
+    --aurora-1: color-mix(in srgb, var(--accent) 62%, transparent);
+    --aurora-2: color-mix(in srgb, var(--accent-hi) 48%, transparent);
+    --aurora-3: color-mix(in srgb, var(--m-red) 40%, transparent);
+}
+
+/* ---------- 1. Ambient aurora ----------------------------------------------
+   A fixed field of soft colour blobs living *between* the scrim (body::before)
+   and the content, blended with `screen` so it reads as light glowing up
+   through the studio floor. It slowly wanders, and because the frosted panes
+   sample whatever is behind them, the whole interface subtly shifts hue as it
+   moves — the liquid in liquid-glass. Scoped away from the login body, which
+   runs its own bloom. */
+body:not(.login-body)::after {
+    content: '';
+    position: fixed;
+    inset: -25%;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(38% 46% at 22% 26%, var(--aurora-1) 0%, transparent 60%),
+        radial-gradient(34% 42% at 82% 30%, var(--aurora-2) 0%, transparent 62%),
+        radial-gradient(48% 52% at 60% 92%, var(--aurora-3) 0%, transparent 64%);
+    filter: blur(34px) saturate(150%);
+    opacity: 0.5;
+    mix-blend-mode: screen;
+    animation: g16-aurora 30s var(--ease) infinite alternate;
+    will-change: transform, opacity;
+}
+
+@keyframes g16-aurora {
+    0%   { transform: translate3d(-3%, -2%, 0) scale(1);    opacity: 0.42; }
+    50%  { transform: translate3d(2%, 1%, 0) scale(1.08);   opacity: 0.58; }
+    100% { transform: translate3d(3%, 3%, 0) scale(1.03);   opacity: 0.48; }
+}
+
+/* ---------- 2. Filmic grain -------------------------------------------------
+   A wafer-thin fractal-noise sheet over the whole app. Big flat areas of
+   backdrop-blur band into visible steps on gradients; a touch of grain breaks
+   the banding and lends the glass a photographed, non-digital finish. Sits
+   above the content but below the toast / palette layers (z 9999+). */
+.app-container::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 140px 140px;
+}
+
+/* ---------- 3. Pointer specular on every pane -------------------------------
+   Each pane gets a soft radial highlight parked just off its top edge; a JS
+   listener rewrites --mx/--my to the cursor so the light glides across the
+   glass on hover. z-index:-1 paints it *above* the pane's own frosted fill but
+   *below* its content (per CSS paint order), so text never washes out. The
+   pane must own a background for a negative-z child to have something to sit
+   on — every target here does. */
+.card {
+    position: relative;
+}
+
+.card::before,
+.stat-card::before,
+.deck::after,
+.sidebar::before,
+.command-palette-card::after,
+.theme-picker-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    background: radial-gradient(var(--spot-size) circle at var(--mx) var(--my),
+            var(--spot) 0%, transparent 62%);
+    opacity: 0;
+    transition: opacity 0.35s var(--ease);
+}
+
+.card:hover::before,
+.stat-card:hover::before,
+.deck:hover::after,
+.sidebar:hover::before {
+    opacity: 1;
+}
+
+/* Floating panels keep a permanent, gentler glow — you rarely hover their rim
+   but they should still catch the light. */
+.command-palette-card::after,
+.theme-picker-card::after {
+    opacity: 0.85;
+}
+
+/* Sidebar highlight is broader and dimmer — it's a tall slab, not a chip. */
+.sidebar::before {
+    background: radial-gradient(460px circle at var(--mx) var(--my),
+            var(--spot) 0%, transparent 60%);
+}
+
+/* ---------- 4. Entrance cascade --------------------------------------------
+   When a tab activates its blocks settle in one after another instead of
+   arriving as a single slab — a short, weighted stagger that reads as the
+   cluster powering up. Runs off the same .active class the base riseIn uses. */
+.tab-content.active .section-body > *,
+.tab-content.active .card-grid > * {
+    animation: g16-settle 0.5s var(--ease) both;
+}
+
+@keyframes g16-settle {
+    from { opacity: 0; transform: translateY(15px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.tab-content.active .section-body > *:nth-child(1) { animation-delay: 0.03s; }
+.tab-content.active .section-body > *:nth-child(2) { animation-delay: 0.08s; }
+.tab-content.active .section-body > *:nth-child(3) { animation-delay: 0.13s; }
+.tab-content.active .section-body > *:nth-child(4) { animation-delay: 0.18s; }
+.tab-content.active .section-body > *:nth-child(5) { animation-delay: 0.23s; }
+.tab-content.active .section-body > *:nth-child(6) { animation-delay: 0.28s; }
+.tab-content.active .card-grid > *:nth-child(1) { animation-delay: 0.04s; }
+.tab-content.active .card-grid > *:nth-child(2) { animation-delay: 0.10s; }
+.tab-content.active .card-grid > *:nth-child(3) { animation-delay: 0.16s; }
+.tab-content.active .card-grid > *:nth-child(4) { animation-delay: 0.22s; }
+
+/* ---------- 5. Gauges breathe ----------------------------------------------
+   A slow accent-tinted glow pulse so the dials read as powered instruments
+   rather than static rings. drop-shadow wraps the whole dial incl. its arcs. */
+.gauge {
+    animation: g16-breathe 5s var(--ease) infinite;
+}
+
+@keyframes g16-breathe {
+    0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+    50%      { filter: drop-shadow(0 0 13px var(--accent-glow)); }
+}
+
+.stat-card:hover .gauge {
+    animation-duration: 2.6s;
+}
+
+/* ---------- 6. Glass scrollbars --------------------------------------------
+   Overrides the earlier steel thumb: a translucent white pill on a bare track,
+   floating on padding-box so it looks inset in the glass. */
+::-webkit-scrollbar {
+    width: 11px;
+    height: 11px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 20px;
+    transition: background 0.2s var(--ease);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--accent) 66%, rgba(255, 255, 255, 0.25));
+    background-clip: padding-box;
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+/* ---------- 7. Detail polish ------------------------------------------------ */
+
+/* Buttons lift on hover and press down on click — a physical, tactile feel. */
+.btn:not(:disabled):hover {
+    transform: translateY(-1px);
+}
+
+.btn:not(:disabled):active {
+    transform: translateY(0) scale(0.985);
+}
+
+/* The system status dot gets a live halo instead of a flat pip. */
+.dot.pulse {
+    box-shadow:
+        0 0 0 0 var(--accent-a45),
+        0 0 12px 1px var(--accent-glow);
+}
+
+/* Command hint keys read as tiny frosted chips. */
+.btn kbd {
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+}
+
+/* A brighter, softer focus ring on glass — two translucent bands. */
+:focus-visible {
+    outline: none;
+}
+
+.nav-links li:focus-visible,
+.stat-card:focus-visible,
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--bg) 80%, transparent),
+        0 0 0 4px var(--accent),
+        0 0 22px -6px var(--accent-glow);
+}
+
+/* Card hover lift is a touch higher now, to sell the pointer glow beneath it. */
+.card:hover {
+    transform: translateY(-3px);
+}
+
+/* ---------- 8. Reduced-motion / -transparency / no-backdrop ------------------
+   Kill the living layer cleanly for users (or engines) that opt out, so the
+   interface degrades to the solid v15 frost rather than to mush. */
+@media (prefers-reduced-motion: reduce) {
+    body:not(.login-body)::after,
+    .gauge,
+    .tab-content.active .section-body > *,
+    .tab-content.active .card-grid > * {
+        animation: none !important;
+    }
+
+    .btn:not(:disabled):hover,
+    .btn:not(:disabled):active,
+    .card:hover {
+        transform: none !important;
+    }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    body:not(.login-body)::after,
+    .app-container::after {
+        display: none;
+    }
+
+    .card::before,
+    .stat-card::before,
+    .deck::after,
+    .sidebar::before,
+    .command-palette-card::after,
+    .theme-picker-card::after {
+        display: none;
+    }
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    /* Without blur the aurora would read as hard coloured blobs — dim it hard. */
+    body:not(.login-body)::after {
+        opacity: 0.28;
+    }
+
+    .card::before,
+    .stat-card::before,
+    .deck::after,
+    .sidebar::before {
+        opacity: 0 !important;
+    }
+}
