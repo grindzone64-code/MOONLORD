@@ -20,6 +20,24 @@ function isRainlinkOnline(r) {
     return false;
 }
 
+function getRainlinkPlayers(r) {
+    if (!r || !r.players) return [];
+    try {
+        if (r.players.cache) {
+            if (typeof r.players.cache.values === 'function') {
+                return Array.from(r.players.cache.values());
+            }
+            if (typeof r.players.cache === 'object') {
+                return Object.values(r.players.cache);
+            }
+        }
+        if (typeof r.players.values === 'function') {
+            return Array.from(r.players.values());
+        }
+    } catch (e) {}
+    return [];
+}
+
 class WebServer {
     constructor() {
         this.app = express();
@@ -625,10 +643,8 @@ class WebServer {
                     }
 
                     const botRainlink = bot.client?.rainlink || bot.rainlink;
-                    if (botRainlink && botRainlink.players) {
-                        for (const p of botRainlink.players.values()) {
-                            try { p.destroy(); } catch (e) {}
-                        }
+                    for (const p of getRainlinkPlayers(botRainlink)) {
+                        try { p.destroy(); } catch (e) {}
                     }
                     nativePlayer.disconnect(bot);
                     disconnected++;
@@ -860,33 +876,31 @@ class WebServer {
             const bots = this.getBotPool(req).filter(b => b.client && b.client.isReady());
             for (const b of bots) {
                 const r = b.client?.rainlink || b.rainlink;
-                if (r && r.players) {
-                    for (const p of r.players.values()) {
-                        if (p && (p.playing || p.paused) && p.queue?.current) {
-                            const cur = p.queue.current;
-                            return res.json({
-                                status: 'success',
+                for (const p of getRainlinkPlayers(r)) {
+                    if (p && (p.playing || p.paused) && p.queue?.current) {
+                        const cur = p.queue.current;
+                        return res.json({
+                            status: 'success',
+                            title: cur.title || 'Unknown Track',
+                            author: cur.author || 'YouTube',
+                            playing: p.playing && !p.paused,
+                            isPaused: Boolean(p.paused),
+                            track: {
                                 title: cur.title || 'Unknown Track',
                                 author: cur.author || 'YouTube',
-                                playing: p.playing && !p.paused,
-                                isPaused: Boolean(p.paused),
-                                track: {
-                                    title: cur.title || 'Unknown Track',
-                                    author: cur.author || 'YouTube',
-                                    uri: cur.uri || '',
-                                    duration: cur.duration || cur.length || 0,
-                                    thumbnail: cur.thumbnail || ''
-                                },
-                                position: Math.max(0, p.position || 0),
+                                uri: cur.uri || '',
                                 duration: cur.duration || cur.length || 0,
-                                loop: p.loop === 'track',
-                                volume: p.volume || 100,
-                                gainDb: 0,
-                                bassDb: 0,
-                                filter: null,
-                                queueLength: p.queue.size || 0
-                            });
-                        }
+                                thumbnail: cur.thumbnail || ''
+                            },
+                            position: Math.max(0, p.position || 0),
+                            duration: cur.duration || cur.length || 0,
+                            loop: p.loop === 'track',
+                            volume: p.volume || 100,
+                            gainDb: 0,
+                            bassDb: 0,
+                            filter: null,
+                            queueLength: p.queue?.size || 0
+                        });
                     }
                 }
             }
@@ -906,7 +920,7 @@ class WebServer {
             if (!isMulti) {
                 const alreadyInVoice = bots.find(b => {
                     const r = b.client?.rainlink || b.rainlink;
-                    if (r && r.players && r.players.size > 0) return true;
+                    if (getRainlinkPlayers(r).length > 0) return true;
                     const s = nativePlayer.getBotState(b);
                     return s.voiceConnection && s.voiceConnection.state?.status === 'ready';
                 });
@@ -928,12 +942,10 @@ class WebServer {
                 if (!resolvedChannelId) {
                     for (const b of bots) {
                         const r = b.client?.rainlink || b.rainlink;
-                        if (r && r.players && r.players.size > 0) {
-                            for (const p of r.players.values()) {
-                                if (p.voiceId) {
-                                    resolvedChannelId = p.voiceId;
-                                    break;
-                                }
+                        for (const p of getRainlinkPlayers(r)) {
+                            if (p && p.voiceId) {
+                                resolvedChannelId = p.voiceId;
+                                break;
                             }
                         }
                         if (resolvedChannelId) break;
@@ -1104,10 +1116,8 @@ class WebServer {
             const bots = this.getTargetBots(targetBot, targetBots, req);
             bots.forEach(b => {
                 const r = b.client?.rainlink || b.rainlink;
-                if (r && r.players) {
-                    for (const p of r.players.values()) {
-                        try { p.setPause(true); } catch (e) {}
-                    }
+                for (const p of getRainlinkPlayers(r)) {
+                    try { p.setPause(true); } catch (e) {}
                 }
                 nativePlayer.pause(b);
             });
@@ -1119,10 +1129,8 @@ class WebServer {
             const bots = this.getTargetBots(targetBot, targetBots, req);
             bots.forEach(b => {
                 const r = b.client?.rainlink || b.rainlink;
-                if (r && r.players) {
-                    for (const p of r.players.values()) {
-                        try { p.setPause(false); } catch (e) {}
-                    }
+                for (const p of getRainlinkPlayers(r)) {
+                    try { p.setPause(false); } catch (e) {}
                 }
                 nativePlayer.resume(b);
             });
@@ -1134,10 +1142,8 @@ class WebServer {
             const bots = this.getTargetBots(targetBot, targetBots, req);
             bots.forEach(b => {
                 const r = b.client?.rainlink || b.rainlink;
-                if (r && r.players) {
-                    for (const p of r.players.values()) {
-                        try { p.skip(); } catch (e) {}
-                    }
+                for (const p of getRainlinkPlayers(r)) {
+                    try { p.skip(); } catch (e) {}
                 }
                 nativePlayer.skip(b);
             });
@@ -1149,10 +1155,8 @@ class WebServer {
             const bots = this.getTargetBots(targetBot, targetBots, req);
             bots.forEach(b => {
                 const r = b.client?.rainlink || b.rainlink;
-                if (r && r.players) {
-                    for (const p of r.players.values()) {
-                        try { p.stop(); p.destroy(); } catch (e) {}
-                    }
+                for (const p of getRainlinkPlayers(r)) {
+                    try { p.stop(); p.destroy(); } catch (e) {}
                 }
                 nativePlayer.stop(b);
             });
@@ -1165,14 +1169,12 @@ class WebServer {
             let loopRes = loop;
             bots.forEach(b => {
                 const r = b.client?.rainlink || b.rainlink;
-                if (r && r.players) {
-                    for (const p of r.players.values()) {
-                        try {
-                            const newMode = p.loop === 'track' ? 'none' : 'track';
-                            p.setLoop(newMode);
-                            loopRes = newMode === 'track';
-                        } catch (e) {}
-                    }
+                for (const p of getRainlinkPlayers(r)) {
+                    try {
+                        const newMode = p.loop === 'track' ? 'none' : 'track';
+                        p.setLoop(newMode);
+                        loopRes = newMode === 'track';
+                    } catch (e) {}
                 }
                 nativePlayer.setLoop(b, loop);
             });
@@ -1185,10 +1187,8 @@ class WebServer {
             const bots = this.getTargetBots(targetBot, targetBots, req);
             bots.forEach(b => {
                 const r = b.client?.rainlink || b.rainlink;
-                if (r && r.players) {
-                    for (const p of r.players.values()) {
-                        try { p.setVolume(vol); } catch (e) {}
-                    }
+                for (const p of getRainlinkPlayers(r)) {
+                    try { p.setVolume(vol); } catch (e) {}
                 }
                 nativePlayer.setVolume(b, volume);
             });
@@ -1201,15 +1201,13 @@ class WebServer {
             let finalPos = 0;
             bots.forEach(b => {
                 const r = b.client?.rainlink || b.rainlink;
-                if (r && r.players) {
-                    for (const p of r.players.values()) {
-                        try {
-                            const curPos = p.position || 0;
-                            const target = offset !== undefined ? Math.max(0, curPos + Number(offset)) : Number(position || 0);
-                            p.seek(target);
-                            finalPos = target;
-                        } catch (e) {}
-                    }
+                for (const p of getRainlinkPlayers(r)) {
+                    try {
+                        const curPos = p.position || 0;
+                        const target = offset !== undefined ? Math.max(0, curPos + Number(offset)) : Number(position || 0);
+                        p.seek(target);
+                        finalPos = target;
+                    } catch (e) {}
                 }
                 if (offset !== undefined) {
                     finalPos = nativePlayer.seek(b, offset, true);
