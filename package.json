@@ -6,6 +6,7 @@
   "bin": "launcher.js",
   "scripts": {
     "start": "node index.js",
+    "postinstall": "node utils/ensureYtdl.js",
     "app": "electron .",
     "icon": "node gen-icon.js",
     "dist": "electron-builder --win portable",

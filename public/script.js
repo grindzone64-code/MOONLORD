@@ -413,19 +413,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const isAndroidDevice = /Android/i.test(navigator.userAgent) || 
         (typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.host.includes('androidplatform.net')));
 
+    function getClientId() {
+        try {
+            const storage = (typeof safeStorage !== 'undefined' ? safeStorage : (typeof localStorage !== 'undefined' ? localStorage : null));
+            let id = storage ? storage.getItem('moonlord_client_id') : null;
+            if (!id || id === 'mobile' || id.length < 8) {
+                id = 'ml_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+                if (storage) storage.setItem('moonlord_client_id', id);
+            }
+            return id;
+        } catch (e) {
+            return 'ml_client_' + Date.now();
+        }
+    }
+
     function getCurrentLicenseKey() {
         if (window._currentLicenseKey) return window._currentLicenseKey;
         try {
             const storage = (typeof safeStorage !== 'undefined' ? safeStorage : (typeof localStorage !== 'undefined' ? localStorage : null));
             const directKey = storage ? storage.getItem('keyauth_license_key') : null;
-            if (directKey) return directKey.trim();
+            if (directKey && directKey.trim()) return directKey.trim();
             const raw = storage ? storage.getItem('keyauth_session_data') : null;
             if (raw) {
                 const sess = JSON.parse(raw);
-                return (sess.key || sess.user || '').trim();
+                const k = (sess.key || sess.user || '').trim();
+                if (k) return k;
             }
         } catch (e) {}
-        return '';
+        return getClientId();
     }
 
     function getApiBase() {
@@ -565,14 +580,19 @@ document.addEventListener('DOMContentLoaded', () => {
     async function callApi(endpoint, method = 'GET', data = null) {
         try {
             const lic = getCurrentLicenseKey();
+            const clientId = getClientId();
+            const storage = (typeof safeStorage !== 'undefined' ? safeStorage : (typeof localStorage !== 'undefined' ? localStorage : null));
+            const ownerId = storage ? (storage.getItem('moonlord_discord_owner_id') || '') : '';
+
             const headers = { 
                 'Content-Type': 'application/json',
-                'bypass-tunnel-reminder': 'true'
+                'bypass-tunnel-reminder': 'true',
+                'x-license-key': lic,
+                'x-client-id': clientId,
+                'x-device-id': clientId
             };
-            if (lic) {
-                headers['x-license-key'] = lic;
-            } else if (typeof getHWID === 'function') {
-                headers['x-device-id'] = getHWID();
+            if (ownerId) {
+                headers['x-discord-owner-id'] = ownerId;
             }
 
             const options = {
@@ -583,9 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const base = getApiBase();
             const sep = endpoint.includes('?') ? '&' : '?';
-            const url = lic 
-                ? `${base}${endpoint}${sep}license_key=${encodeURIComponent(lic)}` 
-                : `${base}${endpoint}${sep}device_id=${encodeURIComponent(headers['x-device-id'] || 'mobile')}`;
+            const url = `${base}${endpoint}${sep}license_key=${encodeURIComponent(lic)}&client_id=${encodeURIComponent(clientId)}`;
             const response = await fetch(url, options);
             const contentType = response.headers.get('content-type') || '';
             if (!contentType.includes('application/json')) {
@@ -931,7 +949,9 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`Loading: ${query}...`, 'info');
 
         try {
-            const res = await callApi('/music/play', 'POST', { query, channel_id, deaf, mute, targetBot: targetsData.targetBot, targetBots: targetsData.targetBots });
+            const storage = (typeof safeStorage !== 'undefined' ? safeStorage : (typeof localStorage !== 'undefined' ? localStorage : null));
+            const savedOwnerId = storage ? (storage.getItem('moonlord_discord_owner_id') || '') : '';
+            const res = await callApi('/music/play', 'POST', { query, channel_id, owner_id: savedOwnerId, deaf, mute, targetBot: targetsData.targetBot, targetBots: targetsData.targetBots });
             if (res && res.status === 'success') {
                 showToast(res.message || `Now Playing: ${res.track?.title || query}`, 'success');
             } else {

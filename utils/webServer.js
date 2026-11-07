@@ -41,17 +41,26 @@ class WebServer {
     getLicenseKey(req) {
         const raw = (req && (
             req.headers['x-license-key'] ||
+            req.headers['x-client-id'] ||
             req.headers['x-device-id'] ||
             req.query?.license_key ||
+            req.query?.client_id ||
             req.query?.device_id ||
             req.body?.license_key ||
+            req.body?.client_id ||
             req.body?.device_id
         )) || '';
-        const trimmed = String(raw).trim();
-        if (trimmed && trimmed !== 'null' && trimmed !== 'undefined' && trimmed !== 'license-user') {
-            return trimmed.replace(/[^a-zA-Z0-9_-]/g, '_');
+        let trimmed = String(raw).trim();
+        if (trimmed && trimmed !== 'null' && trimmed !== 'undefined' && trimmed !== 'license-user' && trimmed !== 'mobile') {
+            return trimmed.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
         }
-        return null;
+        // If no explicit license/client-id is provided or generic 'mobile' was sent, isolate by client IP
+        const clientIp = (req && (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || ''))
+            .split(',')[0].trim().replace(/[^a-zA-Z0-9]/g, '');
+        if (clientIp) {
+            return `ip_${clientIp}`.slice(0, 64);
+        }
+        return 'default_fleet';
     }
 
     getLicenseTokenPath(lic) {
@@ -849,8 +858,8 @@ class WebServer {
                     }
                 }
                 if (!resolvedChannelId) {
-                    const ownerId = (global.config?.allowedUserIds || [])[0];
-                    if (ownerId) {
+                    const ownerId = (req.body.owner_id || req.headers['x-discord-owner-id'] || (global.config?.allowedUserIds || [])[0] || '').trim();
+                    if (ownerId && ownerId !== 'YOUR_DISCORD_USER_ID') {
                         for (const b of bots) {
                             for (const g of b.client.guilds.cache.values()) {
                                 const ovs = g.voiceStates?.cache?.get(ownerId);
@@ -878,15 +887,6 @@ class WebServer {
                         let targetChannel = null;
                         if (resolvedChannelId) {
                             targetChannel = bot.client.channels.cache.get(resolvedChannelId) || await bot.client.channels.fetch(resolvedChannelId).catch(() => null);
-                        }
-                        if (!targetChannel) {
-                            for (const g of (bot.client.guilds?.cache?.values() || [])) {
-                                const vc = g.channels?.cache?.find(c => (c.type === 'GUILD_VOICE' || c.isVoice?.()) && c.joinable);
-                                if (vc) {
-                                    targetChannel = vc;
-                                    break;
-                                }
-                            }
                         }
 
                         if (targetChannel) {

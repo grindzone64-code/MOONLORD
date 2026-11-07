@@ -20,7 +20,7 @@ function checkYtDlpTitle(url) {
         execFile(ytdlExe, [
             '--no-warnings',
             '--js-runtimes', 'node',
-            '--extractor-args', 'youtube:player_client=android,ios',
+            '--extractor-args', 'youtube:player_client=android,ios,web',
             '--get-title',
             '--no-playlist',
             url
@@ -47,12 +47,12 @@ function getYtdlExecutable() {
         path.join(process.cwd(), 'yt-dlp.exe'),
         'C:\\Users\\chint\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\yt-dlp.exe'
     ] : [
+        path.join(__dirname, '..', 'bin', 'yt-dlp'),
+        path.join(process.cwd(), 'bin', 'yt-dlp'),
         '/usr/local/bin/yt-dlp',
         '/usr/bin/yt-dlp',
         '/tmp/yt-dlp',
-        path.join(__dirname, '..', 'bin', 'yt-dlp'),
         path.join(__dirname, '..', 'yt-dlp'),
-        path.join(process.cwd(), 'bin', 'yt-dlp'),
         path.join(process.cwd(), 'yt-dlp')
     ];
 
@@ -65,23 +65,15 @@ function getYtdlExecutable() {
         }
     }
 
-    // On Linux/Cloud, if yt-dlp is missing, automatically download it to /tmp/yt-dlp as a self-healing fallback
+    // On Linux/Cloud, if yt-dlp is missing, use ensureYtdl fallback
     if (!isWin) {
-        const tmpYtdl = '/tmp/yt-dlp';
-        if (fs.existsSync(tmpYtdl)) {
-            try { fs.chmodSync(tmpYtdl, 0o755); } catch (e) {}
-            return tmpYtdl;
-        }
         try {
-            console.log('[NativePlayer] yt-dlp binary missing on Linux. Auto-downloading standalone binary to /tmp/yt-dlp...');
-            execSync('curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /tmp/yt-dlp && chmod +x /tmp/yt-dlp', { timeout: 30000 });
-            if (fs.existsSync(tmpYtdl)) {
-                console.log('[NativePlayer] Successfully downloaded yt-dlp to /tmp/yt-dlp');
-                return tmpYtdl;
+            const { ensureYtdl } = require('./ensureYtdl');
+            const installed = ensureYtdl();
+            if (installed && fs.existsSync(installed)) {
+                return installed;
             }
-        } catch (downloadErr) {
-            console.error('[NativePlayer] Auto-download failed:', downloadErr.message);
-        }
+        } catch (e) {}
     }
 
     return 'yt-dlp';
@@ -445,6 +437,7 @@ class NativePlayer {
                 if (seekSec > 0) args.push('-ss', seekSec.toFixed(2));
                 args.push('-i', track.url);
                 if (af) args.push('-af', af);
+                args.push('-vn');
                 args.push('-c:a', 'libopus', '-b:a', '128k', '-f', 'ogg', 'pipe:1');
 
                 const ff = spawn(ffmpegExe, args, { windowsHide: true });
@@ -465,8 +458,8 @@ class NativePlayer {
         const ytdlProc = spawn(ytdlExe, [
             '--no-warnings',
             '--js-runtimes', 'node',
-            '--extractor-args', 'youtube:player_client=android,ios',
-            '-f', '251/bestaudio[ext=webm]/18/bestaudio/best',
+            '--extractor-args', 'youtube:player_client=android,ios,web',
+            '-f', 'ba/b',
             '-o', '-',
             '--no-playlist',
             '--quiet',
@@ -496,6 +489,7 @@ class NativePlayer {
         if (seekSec > 0) ffArgs.push('-ss', seekSec.toFixed(2));
         ffArgs.push('-i', 'pipe:0');
         if (af) ffArgs.push('-af', af);
+        ffArgs.push('-vn'); // Essential: discards video so Discord voice demuxer receives pure audio OggOpus stream
         ffArgs.push('-c:a', 'libopus', '-b:a', '128k', '-f', 'ogg', 'pipe:1');
 
         const ffmpegProc = spawn(ffmpegExe, ffArgs, { windowsHide: true });

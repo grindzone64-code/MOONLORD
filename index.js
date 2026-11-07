@@ -13,6 +13,9 @@ const binDir = path.join(__dirname, 'bin');
 if (fs.existsSync(binDir)) {
   process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
 }
+try {
+  require('./utils/ensureYtdl').ensureYtdl();
+} catch (e) {}
 
 // 🛠️ Ensure bundled ffmpeg is in PATH immediately for both node and electron modes
 try {
