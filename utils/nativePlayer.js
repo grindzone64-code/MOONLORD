@@ -17,7 +17,14 @@ const {
 function checkYtDlpTitle(url) {
     const ytdlExe = getYtdlExecutable();
     return new Promise((resolve, reject) => {
-        execFile(ytdlExe, ['--no-warnings', '--js-runtimes', 'node', '--get-title', '--no-playlist', url], { windowsHide: true }, (err, stdout, stderr) => {
+        execFile(ytdlExe, [
+            '--no-warnings',
+            '--js-runtimes', 'node',
+            '--extractor-args', 'youtube:player_client=android,ios',
+            '--get-title',
+            '--no-playlist',
+            url
+        ], { windowsHide: true }, (err, stdout, stderr) => {
             if (err) {
                 const msg = (stderr || err.message).toString();
                 if (/unavailable|private|removed|terminated|not available/i.test(msg)) {
@@ -111,7 +118,7 @@ function getFfmpegExecutable() {
 
 class NativePlayer {
     constructor() {
-        this.states = new Map(); // bot.index -> playerState
+        this.states = new Map(); // stateId (lic_idx) -> playerState
         this.autoSync = {
             on: false,
             interval: 15000,
@@ -121,12 +128,27 @@ class NativePlayer {
         };
     }
 
+    getBotLic(bot) {
+        if (!bot) return 'default';
+        return bot.license || (bot.client && bot.client.license) || 'default';
+    }
+
+    getBotStateId(bot) {
+        const lic = this.getBotLic(bot);
+        const idx = (typeof bot === 'object' && bot !== null) ? (bot.index ?? 0) : 0;
+        return `${lic}_${idx}`;
+    }
+
     getBotState(bot) {
-        const lic = bot.license || (bot.client && bot.client.license) || null;
-        const idx = bot.index !== undefined ? bot.index : 0;
-        const id = lic ? `${lic}_${idx}` : String(idx);
+        const id = (typeof bot === 'string') ? bot : this.getBotStateId(bot);
         if (!this.states.has(id)) {
+            const lic = (typeof bot === 'object' && bot !== null) ? this.getBotLic(bot) : 'default';
+            const idx = (typeof bot === 'object' && bot !== null) ? (bot.index ?? 0) : 0;
             this.states.set(id, {
+                id,
+                license: lic,
+                botIndex: idx,
+                botRef: (typeof bot === 'object' && bot !== null) ? bot : null,
                 voiceConnection: null,
                 audioPlayer: null,
                 currentResource: null,
@@ -144,10 +166,15 @@ class NativePlayer {
                 volume: 100,
                 gainDb: 0,
                 bassDb: 0,
-                filter: null
+                filter: null,
+                masterBotId: null
             });
         }
-        return this.states.get(id);
+        const st = this.states.get(id);
+        if (typeof bot === 'object' && bot !== null && !st.botRef) {
+            st.botRef = bot;
+        }
+        return st;
     }
 
     getPosition(state) {
@@ -191,6 +218,8 @@ class NativePlayer {
 
     async joinChannel(bot, channel, options = {}) {
         const state = this.getBotState(bot);
+        const botLic = this.getBotLic(bot);
+        const stateId = this.getBotStateId(bot);
         const guild = channel.guild || bot.client.guilds.cache.get(channel.guildId);
         if (!guild) throw new Error('Could not resolve guild for voice channel');
 
@@ -205,9 +234,9 @@ class NativePlayer {
             state.voiceConnection = null;
         }
 
-        console.log(`[NativePlayer] Bot #${bot.index} joining voice channel: ${channel.name} (${channel.id}) via DAVE protocol`);
+        console.log(`[NativePlayer] [${botLic}] Bot #${bot.index} joining voice channel: ${channel.name} (${channel.id}) via DAVE protocol`);
 
-        const botGroup = `bot-${bot.index !== undefined ? bot.index : (bot.client?.user?.id || '0')}`;
+        const botGroup = `bot-${bot.client?.user?.id || stateId}`;
         const connection = joinVoiceChannel({
             channelId: channel.id,
             guildId: guild.id,
@@ -222,7 +251,7 @@ class NativePlayer {
         state.guildId = guild.id;
 
         connection.on('stateChange', (oldState, newState) => {
-            console.log(`[NativePlayer] Bot #${bot.index} voice status: ${oldState.status} -> ${newState.status}`);
+            console.log(`[NativePlayer] [${botLic}] Bot #${bot.index} voice status: ${oldState.status} -> ${newState.status}`);
             if (newState.status === VoiceConnectionStatus.Disconnected) {
                 Promise.race([
                     entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
@@ -241,11 +270,11 @@ class NativePlayer {
         });
 
         await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
-        console.log(`[NativePlayer] Bot #${bot.index} Voice connection READY in ${channel.name}!`);
+        console.log(`[NativePlayer] [${botLic}] Bot #${bot.index} Voice connection READY in ${channel.name}!`);
 
-        // If another bot in the fleet is already actively playing, auto-subscribe for instant phase-locked playback
+        // If another bot in the SAME fleet/license is already actively playing, auto-subscribe for instant phase-locked playback
         for (const [id, s] of this.states.entries()) {
-            if (id !== bot.index && s.audioPlayer && s.currentTrack && s.voiceConnection) {
+            if (id !== stateId && s.license === botLic && s.audioPlayer && s.currentTrack && s.voiceConnection) {
                 try {
                     connection.subscribe(s.audioPlayer);
                     state.audioPlayer = s.audioPlayer;
@@ -258,8 +287,8 @@ class NativePlayer {
                     state.gainDb = s.gainDb;
                     state.bassDb = s.bassDb;
                     state.volume = s.volume;
-                    state.masterBotIndex = id;
-                    console.log(`[NativePlayer] Bot #${bot.index} auto-subscribed to active AudioPlayer of Bot #${id} (0ms skew)`);
+                    state.masterBotId = id;
+                    console.log(`[NativePlayer] [${botLic}] Bot #${bot.index} auto-subscribed to active AudioPlayer of ${id} (0ms skew)`);
                     break;
                 } catch (subErr) {
                     console.warn(`[NativePlayer] Auto-subscribe notice:`, subErr.message);
@@ -279,6 +308,7 @@ class NativePlayer {
         }
         state.channelId = null;
         state.guildId = null;
+        state.masterBotId = null;
     }
 
     async resolveTrack(query) {
@@ -354,15 +384,27 @@ class NativePlayer {
 
         // For YouTube URLs where yt-search could not find metadata, validate via yt-dlp
         if (isYouTube) {
-            const title = await checkYtDlpTitle(trimmed);
-            return {
-                title: title || 'YouTube Audio',
-                author: 'YouTube',
-                url: trimmed,
-                duration: 0,
-                thumbnail: '',
-                isLocal: false
-            };
+            try {
+                const title = await checkYtDlpTitle(trimmed);
+                return {
+                    title: title || 'YouTube Audio',
+                    author: 'YouTube',
+                    url: trimmed,
+                    duration: 0,
+                    thumbnail: '',
+                    isLocal: false
+                };
+            } catch (titleErr) {
+                console.warn('[NativePlayer] checkYtDlpTitle fallback:', titleErr.message);
+                return {
+                    title: videoId ? `YouTube (${videoId})` : 'YouTube Audio',
+                    author: 'YouTube',
+                    url: trimmed,
+                    duration: 0,
+                    thumbnail: '',
+                    isLocal: false
+                };
+            }
         }
 
         if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
@@ -423,7 +465,8 @@ class NativePlayer {
         const ytdlProc = spawn(ytdlExe, [
             '--no-warnings',
             '--js-runtimes', 'node',
-            '-f', '251/bestaudio[ext=webm]/bestaudio/best',
+            '--extractor-args', 'youtube:player_client=android,ios',
+            '-f', '251/bestaudio[ext=webm]/18/bestaudio/best',
             '-o', '-',
             '--no-playlist',
             '--quiet',
@@ -448,12 +491,7 @@ class NativePlayer {
             if (state.ytdlProc === ytdlProc) state.ytdlProc = null;
         });
 
-        // If no audio filters and no seeking, stream WebmOpus directly
-        if (!af && seekSec === 0) {
-            return { stream: ytdlProc.stdout, type: StreamType.WebmOpus };
-        }
-
-        // Filter / seek pipeline: pipe yt-dlp through ffmpeg
+        // Always pipe yt-dlp through ffmpeg to guarantee a valid Opus stream for Discord voice
         const ffArgs = [];
         if (seekSec > 0) ffArgs.push('-ss', seekSec.toFixed(2));
         ffArgs.push('-i', 'pipe:0');
@@ -486,6 +524,7 @@ class NativePlayer {
 
     async playTrack(bot, track, seekMs = 0) {
         const state = this.getBotState(bot);
+        const myStateId = this.getBotStateId(bot);
 
         if (!state.voiceConnection || state.voiceConnection.state.status !== VoiceConnectionStatus.Ready) {
             let targetChannel = null;
@@ -535,16 +574,16 @@ class NativePlayer {
                 state.isPaused = false;
                 state.pausedAt = 0;
 
-                // Also clean up any followers phase-locked to this leader
+                // Also clean up only followers phase-locked to this leader
                 for (const [id, fState] of this.states.entries()) {
-                    if (fState.masterBotIndex === bot.index) {
+                    if (fState.masterBotId === myStateId) {
                         fState.currentTrack = null;
                         fState.currentResource = null;
                         fState.startTime = 0;
                         fState.seekOffset = 0;
                         fState.isPaused = false;
                         fState.pausedAt = 0;
-                        fState.masterBotIndex = null;
+                        fState.masterBotId = null;
                     }
                 }
             }
@@ -598,14 +637,15 @@ class NativePlayer {
 
         // Re-subscribe any followers locked to this leader for 0ms phase-lock
         for (const [id, fState] of this.states.entries()) {
-            if (fState.masterBotIndex === bot.index && fState.voiceConnection) {
+            if (fState.masterBotId === myStateId && fState.voiceConnection) {
                 try {
                     fState.voiceConnection.subscribe(state.audioPlayer);
                     fState.audioPlayer = state.audioPlayer;
                     fState.currentTrack = state.currentTrack;
                     fState.startTime = state.startTime;
                     fState.seekOffset = state.seekOffset;
-                    fState.isPaused = state.isPaused;
+                    fState.isPaused = false;
+                    fState.pausedAt = 0;
                     fState.filter = state.filter;
                     fState.gainDb = state.gainDb;
                     fState.bassDb = state.bassDb;
@@ -632,14 +672,15 @@ class NativePlayer {
 
     pause(bot) {
         const state = this.getBotState(bot);
+        const myStateId = this.getBotStateId(bot);
         if (state.audioPlayer && !state.isPaused) {
             try {
                 state.audioPlayer.pause();
                 state.isPaused = true;
                 state.pausedAt = Date.now();
-                // Sync pause state across all phase-locked followers
+                // Sync pause state across all phase-locked followers of THIS leader
                 for (const [id, fState] of this.states.entries()) {
-                    if (fState.masterBotIndex === bot.index) {
+                    if (fState.masterBotId === myStateId) {
                         fState.isPaused = true;
                         fState.pausedAt = state.pausedAt;
                     }
@@ -654,6 +695,7 @@ class NativePlayer {
 
     resume(bot) {
         const state = this.getBotState(bot);
+        const myStateId = this.getBotStateId(bot);
         if (state.audioPlayer && state.isPaused) {
             try {
                 state.audioPlayer.unpause();
@@ -663,9 +705,9 @@ class NativePlayer {
                 }
                 state.isPaused = false;
                 state.pausedAt = 0;
-                // Sync resume state across all phase-locked followers
+                // Sync resume state across all phase-locked followers of THIS leader
                 for (const [id, fState] of this.states.entries()) {
-                    if (fState.masterBotIndex === bot.index) {
+                    if (fState.masterBotId === myStateId) {
                         fState.startTime = state.startTime;
                         fState.isPaused = false;
                         fState.pausedAt = 0;
@@ -681,6 +723,7 @@ class NativePlayer {
 
     stop(bot) {
         const state = this.getBotState(bot);
+        const myStateId = this.getBotStateId(bot);
         state.queue = [];
         if (state.audioPlayer) {
             try { state.audioPlayer.stop(); } catch (e) {}
@@ -700,10 +743,11 @@ class NativePlayer {
         state.startTime = 0;
         state.seekOffset = 0;
         state.pausedAt = 0;
+        state.masterBotId = null;
 
-        // Clean up followers
+        // Clean up followers of THIS leader only
         for (const [id, fState] of this.states.entries()) {
-            if (fState.masterBotIndex === bot.index) {
+            if (fState.masterBotId === myStateId) {
                 fState.currentTrack = null;
                 fState.currentResource = null;
                 fState.startTime = 0;
@@ -711,7 +755,7 @@ class NativePlayer {
                 fState.isPaused = false;
                 fState.pausedAt = 0;
                 fState.audioPlayer = null;
-                fState.masterBotIndex = null;
+                fState.masterBotId = null;
             }
         }
     }
@@ -728,9 +772,10 @@ class NativePlayer {
 
     setVolume(bot, volume) {
         const state = this.getBotState(bot);
+        const myStateId = this.getBotStateId(bot);
         const vol = Math.max(0, Math.min(10000, Number(volume) || 100));
         state.volume = vol;
-        if (state.masterBotIndex !== undefined && state.masterBotIndex !== null && state.masterBotIndex !== bot.index) return;
+        if (state.masterBotId && state.masterBotId !== myStateId) return;
         if (state.currentTrack && !state.isPaused) {
             const pos = this.getPosition(state);
             this.playTrack(bot, state.currentTrack, pos).catch(console.error);
@@ -739,8 +784,9 @@ class NativePlayer {
 
     setGain(bot, gainDb) {
         const state = this.getBotState(bot);
+        const myStateId = this.getBotStateId(bot);
         state.gainDb = Math.max(-12, Math.min(12, Number(gainDb) || 0));
-        if (state.masterBotIndex !== undefined && state.masterBotIndex !== null && state.masterBotIndex !== bot.index) return;
+        if (state.masterBotId && state.masterBotId !== myStateId) return;
         if (state.currentTrack && !state.isPaused) {
             const pos = this.getPosition(state);
             this.playTrack(bot, state.currentTrack, pos).catch(console.error);
@@ -749,8 +795,9 @@ class NativePlayer {
 
     setBass(bot, bassDb) {
         const state = this.getBotState(bot);
+        const myStateId = this.getBotStateId(bot);
         state.bassDb = Math.max(-12, Math.min(6, Number(bassDb) || 0));
-        if (state.masterBotIndex !== undefined && state.masterBotIndex !== null && state.masterBotIndex !== bot.index) return;
+        if (state.masterBotId && state.masterBotId !== myStateId) return;
         if (state.currentTrack && !state.isPaused) {
             const pos = this.getPosition(state);
             this.playTrack(bot, state.currentTrack, pos).catch(console.error);
@@ -759,8 +806,9 @@ class NativePlayer {
 
     setFilter(bot, filter) {
         const state = this.getBotState(bot);
+        const myStateId = this.getBotStateId(bot);
         state.filter = (!filter || filter === 'clear') ? null : filter.toLowerCase();
-        if (state.masterBotIndex !== undefined && state.masterBotIndex !== null && state.masterBotIndex !== bot.index) return;
+        if (state.masterBotId && state.masterBotId !== myStateId) return;
         if (state.currentTrack && !state.isPaused) {
             const pos = this.getPosition(state);
             this.playTrack(bot, state.currentTrack, pos).catch(console.error);
@@ -769,10 +817,13 @@ class NativePlayer {
 
     seek(bot, positionOrOffset, isOffset = false) {
         const state = this.getBotState(bot);
+        const myStateId = this.getBotStateId(bot);
         if (!state.currentTrack) return 0;
-        if (state.masterBotIndex !== undefined && state.masterBotIndex !== null && state.masterBotIndex !== bot.index) {
-            const masterBot = (global.bots || []).find(b => b.index === state.masterBotIndex);
-            if (masterBot) return this.seek(masterBot, positionOrOffset, isOffset);
+        if (state.masterBotId && state.masterBotId !== myStateId) {
+            const masterState = this.states.get(state.masterBotId);
+            if (masterState && masterState.botRef) {
+                return this.seek(masterState.botRef, positionOrOffset, isOffset);
+            }
             return 0;
         }
 
@@ -794,10 +845,13 @@ class NativePlayer {
 
     syncFleet(leaderBot, targetBots) {
         const leaderState = this.getBotState(leaderBot);
+        const leaderStateId = this.getBotStateId(leaderBot);
+        const leaderLic = this.getBotLic(leaderBot);
         if (!leaderState.currentTrack || !leaderState.audioPlayer) return;
 
         for (const follower of targetBots) {
-            if (follower.index === leaderBot.index) continue;
+            const followerStateId = this.getBotStateId(follower);
+            if (followerStateId === leaderStateId) continue;
             const fState = this.getBotState(follower);
             if (!fState.voiceConnection) continue;
 
@@ -826,8 +880,8 @@ class NativePlayer {
             fState.gainDb = leaderState.gainDb;
             fState.bassDb = leaderState.bassDb;
             fState.volume = leaderState.volume;
-            fState.masterBotIndex = leaderBot.index;
-            console.log(`[SyncFleet] Phase-locked Bot #${follower.index} to master AudioPlayer of Bot #${leaderBot.index} (0ms skew)`);
+            fState.masterBotId = leaderStateId;
+            console.log(`[SyncFleet] [${leaderLic}] Phase-locked Bot #${follower.index} to master AudioPlayer of ${leaderStateId} (0ms skew)`);
         }
     }
 

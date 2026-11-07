@@ -449,7 +449,7 @@ class WebServer {
 
         // Voice Join Handler - Supports single bot by default, or multi-bot when explicitly targeted
         this.app.post('/api/music/join', async (req, res) => {
-            const { type, channel_id, deaf, mute, targetBot, targetBots, allBots, syncFleet } = req.body;
+            const { type, channel_id, owner_id, deaf, mute, targetBot, targetBots, allBots, syncFleet } = req.body;
             let bots = this.getTargetBots(targetBot, targetBots, req);
             if (bots.length === 0) {
                 return res.json({ status: 'error', message: 'No online bots available. Please start bot(s) first.' });
@@ -472,16 +472,16 @@ class WebServer {
             // 1. Resolve channel ID across targeted bot(s) if type === 'owner'
             let resolvedChannelId = channel_id || null;
             if (type === 'owner' && !resolvedChannelId) {
-                const ownerId = (global.config?.allowedUserIds || [])[0];
-                if (ownerId) {
+                const targetOwnerId = (owner_id || req.headers['x-discord-owner-id'] || (global.config?.allowedUserIds || [])[0] || '').trim();
+                if (targetOwnerId && targetOwnerId !== 'YOUR_DISCORD_USER_ID') {
                     for (const b of bots) {
                         for (const g of b.client.guilds.cache.values()) {
-                            const ovs = g.voiceStates?.cache?.get(ownerId);
+                            const ovs = g.voiceStates?.cache?.get(targetOwnerId);
                             if (ovs?.channel?.id) {
                                 resolvedChannelId = ovs.channel.id;
                                 break;
                             }
-                            const m = g.members?.cache?.get(ownerId);
+                            const m = g.members?.cache?.get(targetOwnerId);
                             if (m?.voice?.channel?.id) {
                                 resolvedChannelId = m.voice.channel.id;
                                 break;
@@ -489,6 +489,14 @@ class WebServer {
                         }
                         if (resolvedChannelId) break;
                     }
+                }
+                if (!resolvedChannelId) {
+                    return res.json({
+                        status: 'error',
+                        message: targetOwnerId && targetOwnerId !== 'YOUR_DISCORD_USER_ID'
+                            ? `Could not find User ID (${targetOwnerId}) in any Discord Voice Channel. Please join a VC on Discord first, or connect via Voice Channel ID below!`
+                            : 'Please enter your Voice Channel ID directly, or enter your Discord User ID!'
+                    });
                 }
             }
 
@@ -508,25 +516,16 @@ class WebServer {
                             targetChannel = bot.client.channels.cache.get(resolvedChannelId) || await bot.client.channels.fetch(resolvedChannelId).catch(() => null);
                         }
                     }
-                    if (!targetChannel) {
-                        for (const g of bot.client.guilds.cache.values()) {
-                            const vc = g.channels.cache.find(c => (c.type === 'GUILD_VOICE' || c.isVoice?.()) && c.joinable);
-                            if (vc) {
-                                targetChannel = vc;
-                                break;
-                            }
-                        }
-                    }
 
                     if (!targetChannel) {
-                        throw new Error(`Bot #${bot.index} cannot access channel ${resolvedChannelId || 'voice'}`);
+                        throw new Error(`Bot #${bot.index} cannot access channel ${resolvedChannelId || 'voice'}. Ensure the bot has joined that Discord server!`);
                     }
 
                     if (targetChannel && bot.client.channels?.cache) {
                         bot.client.channels.cache.set(targetChannel.id, targetChannel);
                     }
 
-                    console.log(`[Join] Bot #${bot.index} connecting to voice channel: ${targetChannel.name} (${targetChannel.id})`);
+                    console.log(`[Join] Bot #${bot.index} (${bot.license || 'global'}) connecting to voice channel: ${targetChannel.name} (${targetChannel.id})`);
                     await nativePlayer.joinChannel(bot, targetChannel, { deaf, mute });
                     return { success: true, botIndex: bot.index };
                 } catch (e) {

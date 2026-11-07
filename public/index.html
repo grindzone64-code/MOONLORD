@@ -542,7 +542,7 @@
                     <label for="cfg-server-url">Cloud Server URL (Multi-Phone Gateway)</label>
                     <div class="field-wrap">
                         <i class="fas fa-server field-icon"></i>
-                        <input type="text" id="cfg-server-url" placeholder="https://moonlord-2.onrender.com" value="https://moonlord-2.onrender.com" spellcheck="false">
+                        <input type="text" id="cfg-server-url" placeholder="https://moonlord-3.onrender.com" value="https://moonlord-3.onrender.com" spellcheck="false">
                     </div>
                 </div>
 
@@ -2088,7 +2088,7 @@
             var secret = (sEl && sEl.value ? sEl.value.trim() : '') || 'da095803867833b2eb776f77dbe33a438c65565a49bf3bdccce9f51f5875a982';
             var version = (vEl && vEl.value ? vEl.value.trim() : '') || '1.0';
             var apiUrl = (aEl && aEl.value ? aEl.value.trim() : '') || 'https://ghostcorporation.shop/api/1.2/';
-            var srvUrl = (srvEl && srvEl.value ? srvEl.value.trim() : '') || 'https://moonlord-2.onrender.com';
+            var srvUrl = (srvEl && srvEl.value ? srvEl.value.trim() : '') || 'https://moonlord-3.onrender.com';
 
             safeStorage.setItem('keyauth_name', name);
             safeStorage.setItem('keyauth_ownerid', ownerid);
@@ -2210,7 +2210,7 @@
                     var sEl = document.getElementById('cfg-secret'); if (sEl) sEl.value = cfg.secret;
                     var vEl = document.getElementById('cfg-version'); if (vEl) vEl.value = cfg.version;
                     var aEl = document.getElementById('cfg-api-url'); if (aEl) aEl.value = cfg.apiUrl;
-                    var srvEl = document.getElementById('cfg-server-url'); if (srvEl) srvEl.value = safeStorage.getItem('moonlord_api_host') || 'https://moonlord-2.onrender.com';
+                    var srvEl = document.getElementById('cfg-server-url'); if (srvEl) srvEl.value = safeStorage.getItem('moonlord_api_host') || 'https://moonlord-3.onrender.com';
                     configModal.classList.add('open');
                 };
             }
@@ -2221,7 +2221,7 @@
 
             var hostEl = document.getElementById('pc-host-text');
             if (hostEl) {
-                var curHost = safeStorage.getItem('moonlord_api_host') || 'https://moonlord-2.onrender.com';
+                var curHost = safeStorage.getItem('moonlord_api_host') || 'https://moonlord-3.onrender.com';
                 hostEl.textContent = curHost.replace('http://', '').replace('https://', '');
             }
 

@@ -785,12 +785,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const mute = document.getElementById('join-mute')?.checked || false;
         const targetsData = getTargets(true);
         const speed = typeof getVCSpeed === 'function' ? getVCSpeed() : 'instant';
-        showToast('Searching for owner voice channel...', 'info');
-        const res = await callApi('/music/join', 'POST', { type: 'owner', deaf, mute, speed, targetBot: targetsData.targetBot, targetBots: targetsData.targetBots });
+        const storage = (typeof safeStorage !== 'undefined' ? safeStorage : (typeof localStorage !== 'undefined' ? localStorage : null));
+        let ownerId = storage ? storage.getItem('discord_owner_id') : null;
+        if (!ownerId) {
+            ownerId = prompt("Enter your Discord User ID so bots find your Voice Channel:\n(In Discord: Right click your username -> Copy User ID)\n\nOr click Cancel and use 'Connect by Channel ID' below:");
+            if (ownerId && ownerId.trim()) {
+                ownerId = ownerId.trim();
+                if (storage) storage.setItem('discord_owner_id', ownerId);
+            }
+        }
+        showToast('Searching for your voice channel...', 'info');
+        const res = await callApi('/music/join', 'POST', { type: 'owner', owner_id: ownerId, deaf, mute, speed, targetBot: targetsData.targetBot, targetBots: targetsData.targetBots });
         if (res && res.status === 'success') {
             showToast(res.message || 'Joined Owner Voice Channel!', 'success');
         } else {
-            showToast((res && res.message) || 'Failed to join owner voice channel', 'danger');
+            showToast((res && res.message) || 'Failed to join voice channel. Tip: Connect using Channel ID below!', 'danger');
         }
     };
     document.getElementById('join-id').onclick = async () => {
