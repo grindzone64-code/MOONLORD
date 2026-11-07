@@ -9,12 +9,13 @@ const nativePlayer = require('./nativePlayer');
 function isRainlinkOnline(r) {
     if (!r || !r.nodes) return false;
     try {
+        const isConnected = (n) => Boolean(n && (n.online === true || n.state === 0) && n.state !== 1 && n.state !== 2);
         if (typeof r.nodes.all === 'function') {
             const list = r.nodes.all();
-            return Array.isArray(list) && list.some(n => n.online || n.state === 0 || n.state === 1);
+            return Array.isArray(list) && list.some(isConnected);
         }
         if (Array.isArray(r.nodes)) {
-            return r.nodes.some(n => n.online || n.state === 0 || n.state === 1);
+            return r.nodes.some(isConnected);
         }
     } catch (e) {}
     return false;
@@ -614,9 +615,13 @@ class WebServer {
             if (joinedCount > 0) {
                 res.json({ status: 'success', message: `Connected ${joinedCount} bot(s) to voice channel.` });
             } else {
+                let friendlyMsg = lastError;
+                if (!friendlyMsg || friendlyMsg.toLowerCase().includes('abort') || friendlyMsg.toLowerCase().includes('time')) {
+                    friendlyMsg = 'Voice connection timed out. Ensure the bot is inside that Discord server and has permission to connect/speak.';
+                }
                 res.json({
                     status: 'error',
-                    message: lastError ? `Could not connect: ${lastError}` : 'Could not find or join the voice channel. Make sure the bot is in that server.'
+                    message: `Could not connect: ${friendlyMsg}`
                 });
             }
         });

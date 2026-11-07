@@ -12,6 +12,9 @@ echo Automatic Cloudflare Tunnel will start in background.
 echo ========================================================
 echo.
 
+echo Starting Local Lavalink Audio Engine (Port 2333)...
+start "Local Lavalink Server" cmd /c "run_lavalink.bat"
+
 echo Starting Local AI Captcha Solver (Python)...
 start "AI Captcha Solver" cmd /c "run_hcap.bat"
 
