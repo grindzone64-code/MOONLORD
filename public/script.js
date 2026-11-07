@@ -444,6 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getApiBase() {
+        if (window._activeDetectedHost) return window._activeDetectedHost + '/api';
         try {
             const storage = (typeof safeStorage !== 'undefined' ? safeStorage : (typeof localStorage !== 'undefined' ? localStorage : null));
             let saved = storage ? storage.getItem('moonlord_api_host') : null;
@@ -456,8 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isAndroidDevice && typeof window !== 'undefined' && window.location.protocol.startsWith('http') && !window.location.host.includes('appassets.androidplatform.net')) {
             return '/api';
         }
-        if (window._activeDetectedHost) return window._activeDetectedHost + '/api';
-        return 'https://moonlord-3.onrender.com/api';
+        return 'https://moonlord1.onrender.com/api';
     }
 
     function setBackendOnline(isOnline) {
@@ -476,12 +476,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Manual server host config on tap
     window.editServerHost = function() {
         const storage = (typeof safeStorage !== 'undefined' ? safeStorage : (typeof localStorage !== 'undefined' ? localStorage : null));
-        const cur = (storage ? storage.getItem('moonlord_api_host') : null) || 'https://moonlord-2.onrender.com';
+        const cur = (storage ? storage.getItem('moonlord_api_host') : null) || 'https://moonlord1.onrender.com';
         const input = prompt(
             "Configure Server Host / IP Address:\n\n" +
-            "• 24/7 Cloud Host: https://moonlord-2.onrender.com\n" +
-            "• PC on Same Wi-Fi: http://192.168.1.3:5000\n" +
-            "• Termux on Phone: http://127.0.0.1:5000\n\nEnter server address:",
+            "• Active Render Cloud Host: https://moonlord1.onrender.com\n" +
+            "• Fixed Lifetime Tunnel: https://afraid-kangaroo-40.loca.lt\n" +
+            "• Local PC on Same Wi-Fi: http://192.168.1.3:5000\n" +
+            "• Localhost: http://127.0.0.1:5000\n\nEnter server address:",
             cur
         );
         if (input && input.trim()) {
@@ -542,10 +543,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) {}
 
-        // 2. Candidate Fallback List (24/7 Render cloud host first!)
+        // 2. Candidate Fallback List (Active Render cloud host first!)
         const saved = storage ? storage.getItem('moonlord_api_host') : null;
         const candidates = [
+            'https://moonlord1.onrender.com',
+            'https://afraid-kangaroo-40.loca.lt',
             saved,
+            'https://reddy-1-onsk.onrender.com',
             'https://moonlord-3.onrender.com',
             'https://moonlord-2.onrender.com',
             'https://moonlord.onrender.com',
@@ -558,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const cleaned = host.replace(/\/+$/, '');
                 const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 1500);
+                const timer = setTimeout(() => controller.abort(), 1800);
                 const res = await fetch(`${cleaned}/api/stats`, {
                     signal: controller.signal,
                     headers: { 'bypass-tunnel-reminder': 'true' }
