@@ -123,6 +123,23 @@ class WebServer {
                 }
             } catch (e) {}
 
+            // If this license has no tokens saved yet, inherit from global tokens.txt
+            if (tokens.length === 0) {
+                const candidates = [
+                    path.join(process.cwd(), 'tokens.txt'),
+                    path.join(__dirname, '..', 'tokens.txt'),
+                    process.env.PORTABLE_EXECUTABLE_DIR ? path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'tokens.txt') : null
+                ].filter(Boolean);
+                for (const c of candidates) {
+                    try {
+                        if (fs.existsSync(c)) {
+                            tokens = fs.readFileSync(c, 'utf8').split(/\r?\n/).map(t => t.trim()).filter(Boolean);
+                            if (tokens.length > 0) break;
+                        }
+                    } catch (e) {}
+                }
+            }
+
             tokens.forEach((token, index) => {
                 if (global.Discord && typeof global.initializeClient === 'function') {
                     try {
@@ -143,7 +160,12 @@ class WebServer {
             });
             global.licenseBotPools.set(lic, botList);
         }
-        return global.licenseBotPools.get(lic);
+
+        const pool = global.licenseBotPools.get(lic);
+        if (pool && pool.length > 0) {
+            return pool;
+        }
+        return global.bots || [];
     }
 
     getTargetBots(targetBot, targetBots, req = null) {
@@ -982,7 +1004,22 @@ class WebServer {
                     }
                 }
 
-                // 1. Resolve track metadata (Local Lavalink / Remote Lavalink / Native yt-dlp)
+                // If still not resolved, auto-select the first available voice channel in the bot's servers
+                if (!resolvedChannelId) {
+                    for (const b of bots) {
+                        for (const g of (b.client.guilds?.cache?.values() || [])) {
+                            const firstVc = g.channels?.cache?.find(c => (typeof c.isVoice === 'function' ? c.isVoice() : c.type === 'GUILD_VOICE' || c.type === 2));
+                            if (firstVc) {
+                                resolvedChannelId = firstVc.id;
+                                console.log(`[Play] Auto-selected default voice channel for playback: ${firstVc.name} (${firstVc.id}) in ${g.name}`);
+                                break;
+                            }
+                        }
+                        if (resolvedChannelId) break;
+                    }
+                }
+
+                // 1. Resolve track metadata (Public Lavalink / Native yt-dlp)
                 let track = null;
                 const leaderBot = bots[0];
                 const leaderRainlink = leaderBot.client?.rainlink || leaderBot.rainlink;
