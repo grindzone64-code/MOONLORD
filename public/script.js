@@ -940,8 +940,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('play-music').onclick = async () => {
         const queryInput = document.getElementById('music-query');
         const query = queryInput ? queryInput.value.trim() : '';
-        const channelInput = document.getElementById('music-channel-id') || document.getElementById('voice-channel-id');
-        const channel_id = channelInput ? channelInput.value.trim() : '';
+        const mInput = document.getElementById('music-channel-id');
+        const vInput = document.getElementById('voice-channel-id');
+        const channel_id = (mInput && mInput.value.trim()) || (vInput && vInput.value.trim()) || '';
         const deaf = document.getElementById('music-deafen')?.checked ?? false;
         const mute = document.getElementById('music-mute')?.checked ?? false;
         const targetsData = getTargets(true);

@@ -278,6 +278,14 @@ class NativePlayer {
             state.voiceConnection = null;
         }
 
+        const botRainlink = bot.client?.rainlink || bot.rainlink;
+        if (botRainlink) {
+            try {
+                const rp = botRainlink.players.get(guild.id);
+                if (rp) rp.destroy();
+            } catch (e) {}
+        }
+
         console.log(`[NativePlayer] [${botLic}] Bot #${bot.index} joining voice channel: ${channel.name} (${channel.id})`);
 
         const botGroup = `bot-${bot.client?.user?.id || stateId}`;
@@ -529,24 +537,26 @@ class NativePlayer {
         const ffmpegExe = getFfmpegExecutable();
 
         if (track.isLocal) {
-            if (af || seekSec > 0) {
-                const args = [];
-                if (seekSec > 0) args.push('-ss', seekSec.toFixed(2));
-                args.push('-i', track.url);
-                if (af) args.push('-af', af);
-                args.push('-vn');
-                args.push('-c:a', 'libopus', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-f', 'ogg', 'pipe:1');
+            const args = [
+                '-fflags', '+genpts+discardcorrupt',
+                '-avoid_negative_ts', 'make_zero'
+            ];
+            if (seekSec > 0) args.push('-ss', seekSec.toFixed(2));
+            args.push('-i', track.url);
+            if (af) args.push('-af', af);
+            args.push('-vn');
+            args.push('-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1');
 
-                const ff = spawn(ffmpegExe, args, { windowsHide: true });
-                state.ffmpegProc = ff;
-                ff.on('close', () => { if (state.ffmpegProc === ff) state.ffmpegProc = null; });
-                ff.on('error', (err) => {
-                    console.error('[NativePlayer] local ffmpeg error:', err.message);
-                    if (state.ffmpegProc === ff) state.ffmpegProc = null;
-                });
-                return { stream: ff.stdout, type: StreamType.OggOpus };
-            }
-            return { stream: fs.createReadStream(track.url), type: StreamType.Arbitrary };
+            const ff = spawn(ffmpegExe, args, { windowsHide: true });
+            state.ffmpegProc = ff;
+            ff.stdin?.on('error', () => {});
+            ff.stdout?.on('error', () => {});
+            ff.on('close', () => { if (state.ffmpegProc === ff) state.ffmpegProc = null; });
+            ff.on('error', (err) => {
+                console.error('[NativePlayer] local ffmpeg error:', err.message);
+                if (state.ffmpegProc === ff) state.ffmpegProc = null;
+            });
+            return { stream: ff.stdout, type: StreamType.Raw };
         }
 
         const { PassThrough } = require('stream');
@@ -660,13 +670,16 @@ class NativePlayer {
             triggerFallback('yt-dlp not available');
         }
 
-        // Always pipe inputStream through ffmpeg to guarantee a valid 48kHz stereo Opus stream for Discord voice
-        const ffArgs = [];
+        // Always pipe inputStream through ffmpeg to guarantee clean 48kHz stereo 16-bit raw PCM for Discord voice
+        const ffArgs = [
+            '-fflags', '+genpts+discardcorrupt',
+            '-avoid_negative_ts', 'make_zero'
+        ];
         if (seekSec > 0) ffArgs.push('-ss', seekSec.toFixed(2));
         ffArgs.push('-i', 'pipe:0');
         if (af) ffArgs.push('-af', af);
-        ffArgs.push('-vn'); // Essential: discards video so Discord voice demuxer receives pure audio OggOpus stream
-        ffArgs.push('-c:a', 'libopus', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-f', 'ogg', 'pipe:1');
+        ffArgs.push('-vn');
+        ffArgs.push('-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1');
 
         const ffmpegProc = spawn(ffmpegExe, ffArgs, { windowsHide: true });
         state.ffmpegProc = ffmpegProc;
@@ -676,6 +689,7 @@ class NativePlayer {
 
         inputStream.on('error', () => {});
         ffmpegProc.stdin.on('error', () => {});
+        ffmpegProc.stdout.on('error', () => {});
 
         ffmpegProc.on('close', () => {
             if (state.ffmpegProc === ffmpegProc) state.ffmpegProc = null;
@@ -690,7 +704,7 @@ class NativePlayer {
             if (state.ffmpegProc === ffmpegProc) state.ffmpegProc = null;
         });
 
-        return { stream: ffmpegProc.stdout, type: StreamType.OggOpus };
+        return { stream: ffmpegProc.stdout, type: StreamType.Raw };
     }
 
     async playTrack(bot, track, seekMs = 0) {
@@ -701,14 +715,16 @@ class NativePlayer {
             let targetChannel = null;
             for (const g of (bot.client.guilds?.cache?.values() || [])) {
                 const vs = g.voiceStates?.cache?.get(bot.client.user?.id);
-                if (vs?.channel) {
-                    targetChannel = vs.channel;
-                    break;
+                const cid = vs?.channelId || vs?.channel?.id;
+                if (cid) {
+                    targetChannel = g.channels?.cache?.get(cid) || (await bot.client.channels.fetch(cid).catch(() => null));
+                    if (targetChannel) break;
                 }
                 const me = g.me || g.members?.cache?.get(bot.client.user?.id);
-                if (me?.voice?.channel) {
-                    targetChannel = me.voice.channel;
-                    break;
+                const mCid = me?.voice?.channelId || me?.voice?.channel?.id;
+                if (mCid) {
+                    targetChannel = g.channels?.cache?.get(mCid) || (await bot.client.channels.fetch(mCid).catch(() => null));
+                    if (targetChannel) break;
                 }
             }
 

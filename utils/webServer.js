@@ -923,13 +923,15 @@ class WebServer {
                     for (const b of bots) {
                         for (const g of (b.client.guilds?.cache?.values() || [])) {
                             const vs = g.voiceStates?.cache?.get(b.client.user?.id);
-                            if (vs?.channel?.id) {
-                                resolvedChannelId = vs.channel.id;
+                            const cid = vs?.channelId || vs?.channel?.id;
+                            if (cid) {
+                                resolvedChannelId = cid;
                                 break;
                             }
                             const me = g.me || g.members?.cache?.get(b.client.user?.id);
-                            if (me?.voice?.channel?.id) {
-                                resolvedChannelId = me.voice.channel.id;
+                            const mCid = me?.voice?.channelId || me?.voice?.channel?.id;
+                            if (mCid) {
+                                resolvedChannelId = mCid;
                                 break;
                             }
                         }
@@ -955,13 +957,15 @@ class WebServer {
                         for (const b of bots) {
                             for (const g of b.client.guilds.cache.values()) {
                                 const ovs = g.voiceStates?.cache?.get(ownerId);
-                                if (ovs?.channel?.id) {
-                                    resolvedChannelId = ovs.channel.id;
+                                const ocid = ovs?.channelId || ovs?.channel?.id;
+                                if (ocid) {
+                                    resolvedChannelId = ocid;
                                     break;
                                 }
                                 const m = g.members?.cache?.get(ownerId);
-                                if (m?.voice?.channel?.id) {
-                                    resolvedChannelId = m.voice.channel.id;
+                                const mcid = m?.voice?.channelId || m?.voice?.channel?.id;
+                                if (mcid) {
+                                    resolvedChannelId = mcid;
                                     break;
                                 }
                             }
@@ -1037,11 +1041,12 @@ class WebServer {
                 }
 
                 // 3. Audio Streaming: Leader plays track directly via Native High-Speed YT-DLP Opus pipeline
-                await nativePlayer.playTrack(leaderBot, track);
+                const activeLeader = readyBots.find(b => b === leaderBot) || readyBots[0];
+                await nativePlayer.playTrack(activeLeader, track);
 
                 // Synchronize all ready followers to the master AudioPlayer for 0ms skew phase-lock
                 if (readyBots.length > 1) {
-                    nativePlayer.syncFleet(leaderBot, readyBots);
+                    nativePlayer.syncFleet(activeLeader, readyBots);
                 }
 
                 // Keep Lavalink player state in sync if node is active
