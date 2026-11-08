@@ -569,26 +569,6 @@ class WebServer {
 
                     console.log(`[Join] Bot #${bot.index} (${bot.license || 'global'}) connecting to voice channel: ${targetChannel.name} (${targetChannel.id})`);
                     await nativePlayer.joinChannel(bot, targetChannel, { deaf, mute });
-
-                    const botRainlink = bot.client?.rainlink || bot.rainlink;
-                    if (isRainlinkOnline(botRainlink)) {
-                        try {
-                            let p = botRainlink.players.get(targetChannel.guild.id);
-                            if (!p) {
-                                await botRainlink.players.create({
-                                    guildId: targetChannel.guild.id,
-                                    voiceId: targetChannel.id,
-                                    textId: targetChannel.id,
-                                    shardId: 0,
-                                    deaf: Boolean(deaf)
-                                });
-                            } else if (p.voiceId !== targetChannel.id) {
-                                p.setVoiceChannel(targetChannel.id);
-                            }
-                        } catch (lavaJoinErr) {
-                            console.warn(`[Join] Lavalink sync notice for Bot #${bot.index}:`, lavaJoinErr.message);
-                        }
-                    }
                     return { success: true, botIndex: bot.index };
                 } catch (e) {
                     console.error(`[Join] Bot #${bot.index} join error:`, e.message);

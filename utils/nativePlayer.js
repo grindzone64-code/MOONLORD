@@ -84,9 +84,12 @@ function getYtdlExecutable() {
         process.resourcesPath ? path.join(process.resourcesPath, 'bin', 'yt-dlp.exe') : null,
         process.resourcesPath ? path.join(process.resourcesPath, 'app', 'bin', 'yt-dlp.exe') : null,
         path.join(__dirname, '..', 'bin', 'yt-dlp.exe'),
+        path.join(__dirname, '..', '..', 'bin', 'yt-dlp.exe'),
         path.join(__dirname, '..', 'yt-dlp.exe'),
         path.join(process.cwd(), 'bin', 'yt-dlp.exe'),
         path.join(process.cwd(), 'yt-dlp.exe'),
+        path.join(process.cwd(), 'Self__bot-main', 'bin', 'yt-dlp.exe'),
+        path.join(process.cwd(), 'Self__bot-main', 'yt-dlp.exe'),
         'C:\\Users\\chint\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\yt-dlp.exe'
     ].filter(Boolean) : [
         path.join(__dirname, '..', 'bin', 'yt-dlp'),
@@ -125,15 +128,22 @@ function getYtdlExecutable() {
 function getFfmpegExecutable() {
     const isWin = process.platform === 'win32';
     const candidates = isWin ? [
-        path.join(__dirname, '..', 'ffmpeg.exe'),
-        path.join(process.cwd(), 'ffmpeg.exe'),
+        process.resourcesPath ? path.join(process.resourcesPath, 'bin', 'ffmpeg.exe') : null,
+        process.resourcesPath ? path.join(process.resourcesPath, 'app', 'bin', 'ffmpeg.exe') : null,
         path.join(__dirname, '..', 'bin', 'ffmpeg.exe'),
-        path.join(process.cwd(), 'bin', 'ffmpeg.exe')
-    ] : [
+        path.join(__dirname, '..', '..', 'bin', 'ffmpeg.exe'),
+        path.join(__dirname, '..', 'ffmpeg.exe'),
+        path.join(process.cwd(), 'bin', 'ffmpeg.exe'),
+        path.join(process.cwd(), 'ffmpeg.exe'),
+        path.join(process.cwd(), 'Self__bot-main', 'bin', 'ffmpeg.exe'),
+        path.join(process.cwd(), 'Self__bot-main', 'ffmpeg.exe')
+    ].filter(Boolean) : [
+        path.join(__dirname, '..', 'bin', 'ffmpeg'),
+        path.join(process.cwd(), 'bin', 'ffmpeg'),
         '/usr/bin/ffmpeg',
         '/usr/local/bin/ffmpeg',
-        path.join(__dirname, '..', 'bin', 'ffmpeg'),
-        path.join(process.cwd(), 'bin', 'ffmpeg')
+        path.join(__dirname, '..', 'ffmpeg'),
+        path.join(process.cwd(), 'ffmpeg')
     ];
     for (const c of candidates) {
         if (fs.existsSync(c)) {
@@ -577,7 +587,19 @@ class NativePlayer {
                         source.stream.on('data', () => { hasOutputData = true; });
                         source.stream.pipe(inputStream);
                     }).catch(e => console.warn('[NativePlayer] play-dl fallback notice:', e.message));
+                    return;
                 }
+            } catch (e) {}
+
+            // Quaternary: SoundCloud fallback for datacenter/cloud IPs where YouTube blocks
+            try {
+                const scTarget = `scsearch1:${track.title || 'audio'}`;
+                console.log(`[NativePlayer] [Fallback SoundCloud] Streaming via: "${scTarget}"`);
+                const scArgs = ['--no-warnings', '-4', '--geo-bypass', '-f', 'ba/b', '-o', '-', '--no-playlist', '--quiet', scTarget];
+                const scProc = spawn(ytdlExe, scArgs, { windowsHide: true });
+                state.ytdlProc = scProc;
+                scProc.stdout.on('data', () => { hasOutputData = true; });
+                scProc.stdout.pipe(inputStream);
             } catch (e) {}
         };
 
@@ -589,6 +611,7 @@ class NativePlayer {
                 const ytdlArgs = [
                     '--no-warnings',
                     '-4',
+                    '--geo-bypass',
                     ...cookieArgs,
                     '--extractor-args', 'youtube:player_client=android,web,visionos',
                     '-f', 'ba/b',
@@ -779,8 +802,13 @@ class NativePlayer {
         state.currentResource = resource;
         state.audioPlayer.play(resource);
 
-        if (state.voiceConnection && state.voiceConnection.state.subscription?.player !== state.audioPlayer) {
-            state.voiceConnection.subscribe(state.audioPlayer);
+        if (state.voiceConnection) {
+            try { state.voiceConnection.subscribe(state.audioPlayer); } catch (e) {}
+            try {
+                if (typeof state.voiceConnection.setSpeaking === 'function') {
+                    state.voiceConnection.setSpeaking(true);
+                }
+            } catch (e) {}
         }
 
         // Re-subscribe any followers locked to this leader for 0ms phase-lock

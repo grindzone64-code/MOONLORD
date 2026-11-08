@@ -3,15 +3,29 @@ const path = require('path');
 const Module = require('module');
 
 // 🛠️ Ensure local node_modules and bin directories are always discoverable across dev & packaged builds
-const appNodeModules = path.join(__dirname, 'node_modules');
-if (fs.existsSync(appNodeModules)) {
-  process.env.NODE_PATH = `${appNodeModules}${path.delimiter}${process.env.NODE_PATH || ''}`;
-  if (typeof Module._initPaths === 'function') Module._initPaths();
+const candidateNodeModules = [
+  path.join(__dirname, 'node_modules'),
+  path.join(__dirname, 'Self__bot-main', 'node_modules'),
+  path.join(process.cwd(), 'node_modules'),
+  path.join(process.cwd(), 'Self__bot-main', 'node_modules')
+];
+for (const appNodeModules of candidateNodeModules) {
+  if (fs.existsSync(appNodeModules)) {
+    process.env.NODE_PATH = `${appNodeModules}${path.delimiter}${process.env.NODE_PATH || ''}`;
+  }
 }
+if (typeof Module._initPaths === 'function') Module._initPaths();
 
-const binDir = path.join(__dirname, 'bin');
-if (fs.existsSync(binDir)) {
-  process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
+const candidateBins = [
+  path.join(__dirname, 'bin'),
+  path.join(__dirname, 'Self__bot-main', 'bin'),
+  path.join(process.cwd(), 'bin'),
+  path.join(process.cwd(), 'Self__bot-main', 'bin')
+];
+for (const binDir of candidateBins) {
+  if (fs.existsSync(binDir)) {
+    process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
+  }
 }
 try {
   require('./utils/ensureYtdl').ensureYtdl();
