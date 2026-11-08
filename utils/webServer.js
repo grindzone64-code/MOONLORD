@@ -567,10 +567,12 @@ class WebServer {
                         bot.client.channels.cache.set(targetChannel.id, targetChannel);
                     }
 
+                    console.log(`[Join] Bot #${bot.index} (${bot.license || 'global'}) connecting to voice channel: ${targetChannel.name} (${targetChannel.id})`);
+                    await nativePlayer.joinChannel(bot, targetChannel, { deaf, mute });
+
                     const botRainlink = bot.client?.rainlink || bot.rainlink;
                     if (isRainlinkOnline(botRainlink)) {
                         try {
-                            console.log(`[Join] Bot #${bot.index} (${bot.license || 'global'}) connecting via Lavalink: ${targetChannel.name} (${targetChannel.id})`);
                             let p = botRainlink.players.get(targetChannel.guild.id);
                             if (!p) {
                                 await botRainlink.players.create({
@@ -583,17 +585,10 @@ class WebServer {
                             } else if (p.voiceId !== targetChannel.id) {
                                 p.setVoiceChannel(targetChannel.id);
                             }
-                            const bState = nativePlayer.getBotState(bot);
-                            bState.channelId = targetChannel.id;
-                            bState.guildId = targetChannel.guild.id;
-                            return { success: true, botIndex: bot.index };
                         } catch (lavaJoinErr) {
-                            console.warn(`[Join] Lavalink join notice for Bot #${bot.index}, falling back to native:`, lavaJoinErr.message);
+                            console.warn(`[Join] Lavalink sync notice for Bot #${bot.index}:`, lavaJoinErr.message);
                         }
                     }
-
-                    console.log(`[Join] Bot #${bot.index} (${bot.license || 'global'}) connecting to voice channel: ${targetChannel.name} (${targetChannel.id})`);
-                    await nativePlayer.joinChannel(bot, targetChannel, { deaf, mute });
                     return { success: true, botIndex: bot.index };
                 } catch (e) {
                     console.error(`[Join] Bot #${bot.index} join error:`, e.message);
@@ -946,6 +941,19 @@ class WebServer {
                 let resolvedChannelId = channel_id || null;
                 if (!resolvedChannelId) {
                     for (const b of bots) {
+                        for (const g of (b.client.guilds?.cache?.values() || [])) {
+                            const vs = g.voiceStates?.cache?.get(b.client.user?.id);
+                            if (vs?.channel?.id) {
+                                resolvedChannelId = vs.channel.id;
+                                break;
+                            }
+                            const me = g.me || g.members?.cache?.get(b.client.user?.id);
+                            if (me?.voice?.channel?.id) {
+                                resolvedChannelId = me.voice.channel.id;
+                                break;
+                            }
+                        }
+                        if (resolvedChannelId) break;
                         const r = b.client?.rainlink || b.rainlink;
                         for (const p of getRainlinkPlayers(r)) {
                             if (p && p.voiceId) {
@@ -982,9 +990,8 @@ class WebServer {
                     }
                 }
 
-                // 1. Resolve track (Lavalink node.bgcrazy.in:25575 as primary)
+                // 1. Resolve track metadata (Local Lavalink / Remote Lavalink / Native yt-dlp)
                 let track = null;
-                let lavalinkTrack = null;
                 const leaderBot = bots[0];
                 const leaderRainlink = leaderBot.client?.rainlink || leaderBot.rainlink;
 
@@ -992,20 +999,20 @@ class WebServer {
                     try {
                         const searchRes = await leaderRainlink.search(query);
                         if (searchRes && searchRes.tracks && searchRes.tracks.length > 0) {
-                            lavalinkTrack = searchRes.tracks[0];
+                            const top = searchRes.tracks[0];
                             track = {
-                                title: lavalinkTrack.title,
-                                author: lavalinkTrack.author || 'YouTube',
-                                url: lavalinkTrack.uri || query,
-                                duration: lavalinkTrack.duration || lavalinkTrack.length || 0,
-                                thumbnail: lavalinkTrack.thumbnail || (lavalinkTrack.identifier ? `https://i.ytimg.com/vi/${lavalinkTrack.identifier}/hqdefault.jpg` : ''),
+                                title: top.title,
+                                author: top.author || 'YouTube',
+                                url: top.uri || query,
+                                duration: top.duration || top.length || 0,
+                                thumbnail: top.thumbnail || (top.identifier ? `https://i.ytimg.com/vi/${top.identifier}/hqdefault.jpg` : ''),
                                 isLocal: false,
-                                encoded: lavalinkTrack.encoded
+                                encoded: top.encoded
                             };
-                            console.log(`[Play] Resolved track via Lavalink: "${track.title}"`);
+                            console.log(`[Play] Resolved track via Lavalink metadata: "${track.title}"`);
                         }
                     } catch (lErr) {
-                        console.warn('[Play] Lavalink search warning:', lErr.message);
+                        console.warn('[Play] Lavalink search notice:', lErr.message);
                     }
                 }
 
@@ -1013,61 +1020,7 @@ class WebServer {
                     track = await nativePlayer.resolveTrack(query);
                 }
 
-                // 2. Play via Lavalink if node is online
-                if (lavalinkTrack && leaderRainlink && isRainlinkOnline(leaderRainlink)) {
-                    try {
-                        const playTasks = bots.map(async (bot) => {
-                            const botRainlink = bot.client?.rainlink || bot.rainlink;
-                            if (!botRainlink) return null;
-
-                            let targetChannel = null;
-                            if (resolvedChannelId) {
-                                for (const g of bot.client.guilds.cache.values()) {
-                                    targetChannel = g.channels.cache.get(resolvedChannelId);
-                                    if (targetChannel) break;
-                                }
-                                if (!targetChannel) {
-                                    targetChannel = bot.client.channels.cache.get(resolvedChannelId) || await bot.client.channels.fetch(resolvedChannelId).catch(() => null);
-                                }
-                            }
-                            if (!targetChannel) return null;
-
-                            let player = botRainlink.players.get(targetChannel.guild.id);
-                            if (!player) {
-                                player = await botRainlink.players.create({
-                                    guildId: targetChannel.guild.id,
-                                    voiceId: targetChannel.id,
-                                    textId: targetChannel.id,
-                                    shardId: 0,
-                                    deaf: Boolean(deaf)
-                                });
-                            } else if (player.voiceId !== targetChannel.id) {
-                                player.setVoiceChannel(targetChannel.id);
-                            }
-
-                            player.queue.clear();
-                            player.queue.add(lavalinkTrack);
-                            await player.play();
-                            return bot.index;
-                        });
-
-                        const playRes = await Promise.allSettled(playTasks);
-                        const successfulBots = playRes.filter(r => r.status === 'fulfilled' && r.value !== null);
-
-                        if (successfulBots.length > 0) {
-                            return res.json({
-                                status: 'success',
-                                message: `Playing: "${track.title}" on ${successfulBots.length} bot(s) (Lavalink Phase-Locked)`,
-                                track
-                            });
-                        }
-                    } catch (lPlayErr) {
-                        console.warn('[Play] Lavalink playback notice, falling back to NativePlayer:', lPlayErr.message);
-                    }
-                }
-
-                // 3. Fallback: NativePlayer
-                // Connect all target bots to voice channel first in parallel
+                // 2. Connect all target bots to voice channel first in parallel via NativePlayer
                 await Promise.allSettled(bots.map(async (bot) => {
                     const botState = nativePlayer.getBotState(bot);
                     let isReady = botState.voiceConnection && botState.voiceConnection.state?.status === 'ready';
@@ -1075,7 +1028,13 @@ class WebServer {
                     if (!isReady) {
                         let targetChannel = null;
                         if (resolvedChannelId) {
-                            targetChannel = bot.client.channels.cache.get(resolvedChannelId) || await bot.client.channels.fetch(resolvedChannelId).catch(() => null);
+                            for (const g of bot.client.guilds.cache.values()) {
+                                targetChannel = g.channels.cache.get(resolvedChannelId);
+                                if (targetChannel) break;
+                            }
+                            if (!targetChannel) {
+                                targetChannel = bot.client.channels.cache.get(resolvedChannelId) || await bot.client.channels.fetch(resolvedChannelId).catch(() => null);
+                            }
                         }
 
                         if (targetChannel) {
@@ -1097,13 +1056,30 @@ class WebServer {
                     });
                 }
 
-                // Master-follower architecture: Leader plays track into Master AudioPlayer
+                // 3. Audio Streaming: Leader plays track directly via Native High-Speed YT-DLP Opus pipeline
                 await nativePlayer.playTrack(leaderBot, track);
 
                 // Synchronize all ready followers to the master AudioPlayer for 0ms skew phase-lock
                 if (readyBots.length > 1) {
                     nativePlayer.syncFleet(leaderBot, readyBots);
                 }
+
+                // Keep Lavalink player state in sync if node is active
+                try {
+                    for (const b of readyBots) {
+                        const r = b.client?.rainlink || b.rainlink;
+                        if (isRainlinkOnline(r)) {
+                            const bState = nativePlayer.getBotState(b);
+                            if (bState.guildId) {
+                                const p = r.players.get(bState.guildId);
+                                if (p) {
+                                    p.queue.clear();
+                                    if (track.encoded) p.queue.add(track);
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {}
 
                 res.json({
                     status: 'success',
