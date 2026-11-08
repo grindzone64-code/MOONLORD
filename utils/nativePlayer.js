@@ -410,12 +410,11 @@ class NativePlayer {
             } catch (e) {}
         }
 
-        // Primary: Query Local Lavalink (port 2333) or remote Lavalink for instant metadata resolution
+        // Primary: Query Public Lavalink (node.bgcrazy.in) for instant metadata resolution
         try {
             const axios = require('axios');
             const lavaIdent = isYouTube || trimmed.startsWith('http') ? trimmed : `ytsearch:${trimmed}`;
             const checkNodes = [
-                { url: 'http://127.0.0.1:2333', auth: 'youshallnotpass' },
                 { url: 'http://node.bgcrazy.in:25575', auth: 'Mark1234' }
             ];
             for (const n of checkNodes) {

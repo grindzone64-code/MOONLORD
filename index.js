@@ -123,18 +123,10 @@ global.initializeClient = initializeClient;
 function initializeClient(client, token, index) {
   client.config = config;
 
-  // Lavalink v4 Client Integration (Local Lavalink primary + BGCrazy fallback)
+  // Lavalink v4 Client Integration (Public Lavalink BGCrazy)
   try {
     const { Rainlink, Library } = require('rainlink');
     const nodes = global.config?.nodes || [
-      {
-        name: 'Local-Lavalink',
-        host: '127.0.0.1',
-        port: 2333,
-        auth: 'youshallnotpass',
-        secure: false,
-        driver: 'lavalink/v4'
-      },
       {
         name: 'BGCrazy-Lavalink',
         host: 'node.bgcrazy.in',

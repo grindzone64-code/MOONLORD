@@ -519,13 +519,15 @@ class WebServer {
                     for (const b of bots) {
                         for (const g of b.client.guilds.cache.values()) {
                             const ovs = g.voiceStates?.cache?.get(targetOwnerId);
-                            if (ovs?.channel?.id) {
-                                resolvedChannelId = ovs.channel.id;
+                            const ocid = ovs?.channelId || ovs?.channel?.id;
+                            if (ocid) {
+                                resolvedChannelId = ocid;
                                 break;
                             }
                             const m = g.members?.cache?.get(targetOwnerId);
-                            if (m?.voice?.channel?.id) {
-                                resolvedChannelId = m.voice.channel.id;
+                            const mcid = m?.voice?.channelId || m?.voice?.channel?.id;
+                            if (mcid) {
+                                resolvedChannelId = mcid;
                                 break;
                             }
                         }
@@ -555,7 +557,13 @@ class WebServer {
                             if (targetChannel) break;
                         }
                         if (!targetChannel) {
-                            targetChannel = bot.client.channels.cache.get(resolvedChannelId) || await bot.client.channels.fetch(resolvedChannelId).catch(() => null);
+                            for (const g of bot.client.guilds.cache.values()) {
+                                targetChannel = await g.channels.fetch(resolvedChannelId).catch(() => null);
+                                if (targetChannel) break;
+                            }
+                            if (!targetChannel) {
+                                targetChannel = bot.client.channels.cache.get(resolvedChannelId) || await bot.client.channels.fetch(resolvedChannelId).catch(() => null);
+                            }
                         }
                     }
 
