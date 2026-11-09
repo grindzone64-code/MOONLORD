@@ -105,6 +105,33 @@ class WebServer {
         return path.join(dataDir, `tokens_${lic}.txt`);
     }
 
+    createClientForBot(bot) {
+        const Discord = global.Discord || require('discord.js-selfbot-v13');
+        if (bot.client) {
+            try { bot.client.removeAllListeners(); } catch (e) {}
+            try { bot.client.destroy(); } catch (e) {}
+        }
+        const client = new Discord.Client({
+            readyStatus: false,
+            checkUpdate: false,
+            intents: ['GUILDS', 'GUILD_VOICE_STATES', 'GUILD_MESSAGES'],
+            partials: ['CHANNEL', 'MESSAGE']
+        });
+        bot.client = client;
+        bot.error = null;
+
+        if (typeof global.initializeClient === 'function') {
+            try { global.initializeClient(client, bot.token, bot.index); } catch (e) {}
+        }
+
+        client.once('ready', () => {
+            bot.error = null;
+            console.log(`[Bot #${bot.index}] Successfully logged in as ${client.user?.tag} (${client.user?.id})`);
+        });
+
+        return client;
+    }
+
     getBotPool(req) {
         const lic = this.getLicenseKey(req);
         if (!lic) {
@@ -141,22 +168,15 @@ class WebServer {
             }
 
             tokens.forEach((token, index) => {
-                if (global.Discord && typeof global.initializeClient === 'function') {
-                    try {
-                        const client = new global.Discord.Client({
-                            readyStatus: false,
-                            checkUpdate: false,
-                            intents: ['GUILDS', 'GUILD_VOICE_STATES', 'GUILD_MESSAGES'],
-                            partials: ['CHANNEL', 'MESSAGE']
-                        });
-                        const botEntry = { client, token, index, license: lic };
-                        botList.push(botEntry);
-                        global.initializeClient(client, token, index);
-                        client.login(token).catch(err => {
-                            console.error(`[License ${lic}] Unit #${index} login failed:`, err.message);
-                        });
-                    } catch (e) {}
-                }
+                const botEntry = { client: null, token, index, license: lic };
+                botList.push(botEntry);
+                try {
+                    const client = this.createClientForBot(botEntry);
+                    client.login(token).catch(err => {
+                        console.error(`[License ${lic}] Unit #${index} login failed:`, err.message);
+                        botEntry.error = err.message;
+                    });
+                } catch (e) {}
             });
             global.licenseBotPools.set(lic, botList);
         }
@@ -707,7 +727,9 @@ class WebServer {
                     tag: b.client?.user?.tag || '',
                     masked,
                     userId: b.client?.user?.id || '',
-                    online: b.client?.isReady() || false
+                    online: b.client?.isReady() || false,
+                    error: b.error || null,
+                    status: b.client?.isReady() ? 'online' : (b.error ? 'error' : 'offline')
                 };
             });
             res.json({ status: 'success', tokens });
@@ -772,30 +794,23 @@ class WebServer {
                 addedCount++;
 
                 const index = botPool.length;
-                if (global.Discord && typeof global.initializeClient === 'function') {
-                    try {
-                        const client = new global.Discord.Client({
-                            readyStatus: false,
-                            checkUpdate: false,
-                            intents: ['GUILDS', 'GUILD_VOICE_STATES', 'GUILD_MESSAGES'],
-                            partials: ['CHANNEL', 'MESSAGE']
+                const botEntry = { client: null, token, index, license: lic || null };
+                botPool.push(botEntry);
+                if (!lic && global.bots && !global.bots.includes(botEntry)) {
+                    global.bots.push(botEntry);
+                }
+
+                try {
+                    const client = this.createClientForBot(botEntry);
+                    if (autoLogin) {
+                        client.login(token).catch(err => {
+                            console.error(`[Token Manager] Login failed for unit #${index}:`, err.message);
+                            botEntry.error = err.message;
                         });
-
-                        const botEntry = { client, token, index, license: lic || null };
-                        botPool.push(botEntry);
-                        if (!lic && global.bots && !global.bots.includes(botEntry)) {
-                            global.bots.push(botEntry);
-                        }
-                        global.initializeClient(client, token, index);
-
-                        if (autoLogin) {
-                            client.login(token).catch(err => {
-                                console.error(`[Token Manager] Login failed for unit #${index}:`, err.message);
-                            });
-                        }
-                    } catch (err) {
-                        console.error(`[Token Manager] Failed to initialize unit #${index}:`, err);
                     }
+                } catch (err) {
+                    console.error(`[Token Manager] Failed to initialize unit #${index}:`, err);
+                    botEntry.error = err.message;
                 }
 
                 results.push({ ok: true, token: masked, message: autoLogin ? 'Enrolled & logging in' : 'Enrolled' });
@@ -814,8 +829,8 @@ class WebServer {
             });
         });
 
-        // Token Session (isolated)
-        this.app.post('/api/tokens/session', (req, res) => {
+        // Token Session (isolated & reconnecting)
+        this.app.post('/api/tokens/session', async (req, res) => {
             const index = parseInt(req.body.index, 10);
             const action = req.body.action;
             const botPool = this.getBotPool(req);
@@ -826,16 +841,61 @@ class WebServer {
 
             if (action === 'login') {
                 if (bot.client?.isReady()) {
-                    return res.json({ status: 'success', message: `Unit #${index} is already online` });
+                    return res.json({ status: 'success', message: `Unit #${index} (${bot.client.user?.tag || 'Online'}) is already online` });
                 }
-                bot.client.login(bot.token).catch(err => {
+
+                try {
+                    const client = this.createClientForBot(bot);
+
+                    // Await login with timeout so the user gets real feedback
+                    await Promise.race([
+                        client.login(bot.token),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Discord login timed out (10s)')), 10000))
+                    ]);
+
+                    // Wait up to 3s for client to become ready
+                    if (!client.isReady()) {
+                        await new Promise(resolve => {
+                            const t = setTimeout(resolve, 3000);
+                            client.once('ready', () => { clearTimeout(t); resolve(); });
+                        });
+                    }
+
+                    if (client.isReady()) {
+                        bot.error = null;
+                        return res.json({
+                            status: 'success',
+                            message: `Unit #${index} started successfully: ${client.user?.tag}`,
+                            tag: client.user?.tag,
+                            userId: client.user?.id
+                        });
+                    } else {
+                        return res.json({
+                            status: 'info',
+                            message: `Unit #${index} connecting to Discord gateway...`
+                        });
+                    }
+                } catch (err) {
                     console.error(`[Session] Login failed for #${index}:`, err.message);
-                });
-                return res.json({ status: 'success', message: `Logging in unit #${index}...` });
+                    let friendlyErr = err.message;
+                    if (err.message.includes('TOKEN_INVALID') || err.message.includes('An invalid token')) {
+                        friendlyErr = 'Invalid token or token was reset';
+                    } else if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+                        friendlyErr = 'Unauthorized: token is expired or revoked';
+                    } else if (err.message.includes('DISALLOWED_INTENTS')) {
+                        friendlyErr = 'Disallowed Gateway Intents';
+                    }
+                    bot.error = friendlyErr;
+                    return res.json({
+                        status: 'error',
+                        message: `Unit #${index} login failed: ${friendlyErr}`
+                    });
+                }
             } else if (action === 'logout') {
                 if (bot.client) {
                     try { bot.client.destroy(); } catch (e) {}
                 }
+                bot.error = null;
                 return res.json({ status: 'success', message: `Unit #${index} logged out` });
             }
             res.json({ status: 'error', message: 'Unknown session action' });
@@ -1607,7 +1667,9 @@ class WebServer {
 
         this.server.on('error', (err) => {
             if (err.code === 'EADDRINUSE') {
-                console.warn(`[WebServer] Port ${this.port} is already in use; dashboard is accessible.`);
+                const nextPort = this.port + 2;
+                console.warn(`[WebServer] Port ${this.port} is already in use; switching to port ${nextPort}...`);
+                this.start(nextPort);
             } else {
                 console.error(`[WebServer] Server error: ${err.message}`);
             }

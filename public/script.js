@@ -2586,9 +2586,9 @@ document.addEventListener('DOMContentLoaded', () => {
         tokens.forEach(t => {
             const row = document.createElement('div');
             row.className = 'token-manage-item';
-            const title = t.tag ? tmEscape(t.tag) : (t.online ? 'Authorised' : 'Not started');
+            const title = t.tag ? tmEscape(t.tag) : (t.online ? 'Authorised' : (t.error ? `<span style="color:var(--danger)">Failed: ${tmEscape(t.error)}</span>` : 'Not started'));
             row.innerHTML = `
-                <span class="tm-dot ${t.online ? 'on' : 'off'}"></span>
+                <span class="tm-dot ${t.online ? 'on' : (t.error ? 'err' : 'off')}"></span>
                 <div class="tm-info">
                     <span class="tm-title">${title}</span>
                     <span class="tm-sub">${tmEscape(t.masked)}${t.userId ? ' · ' + t.userId : ''}</span>
@@ -2613,9 +2613,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const action = btn.getAttribute('data-action');
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                const r = await callApi('/tokens/session', 'POST', { index, action });
-                showToast(r.message || 'Done', r.status === 'success' ? 'success' : 'danger');
-                setTimeout(loadTokenManager, 600);
+                try {
+                    const r = await callApi('/tokens/session', 'POST', { index, action });
+                    showToast(r.message || 'Done', r.status === 'success' ? 'success' : (r.status === 'error' ? 'danger' : 'info'));
+                } catch (e) {
+                    showToast('Connection error: ' + e.message, 'danger');
+                }
+                await loadTokenManager();
+                updateStats();
             };
         });
 
