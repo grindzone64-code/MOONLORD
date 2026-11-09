@@ -884,10 +884,14 @@ class WebServer {
         // Music Playback Endpoints
         this.app.get('/api/music/state', (req, res) => {
             const bots = this.getBotPool(req).filter(b => b.client && b.client.isReady());
+            const nativeState = nativePlayer.getState(bots);
+            if (nativeState && (nativeState.playing || nativeState.isPaused || nativeState.track)) {
+                return res.json(nativeState);
+            }
             for (const b of bots) {
                 const r = b.client?.rainlink || b.rainlink;
                 for (const p of getRainlinkPlayers(r)) {
-                    if (p && (p.playing || p.paused) && p.queue?.current) {
+                    if (p && (p.playing || p.paused) && p.queue?.current && p.state?.connected !== false) {
                         const cur = p.queue.current;
                         return res.json({
                             status: 'success',
@@ -914,7 +918,6 @@ class WebServer {
                     }
                 }
             }
-            const nativeState = nativePlayer.getState(bots);
             res.json(nativeState);
         });
 

@@ -43,8 +43,8 @@ function ensureYtdl() {
     }
 
     try {
-        console.log('[ensureYtdl] Downloading standalone yt-dlp binary into project bin directory...');
-        execSync(`curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "${localBin}" && chmod +x "${localBin}"`, { timeout: 45000 });
+        console.log('[ensureYtdl] Downloading standalone yt-dlp_linux binary into project bin directory...');
+        execSync(`curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o "${localBin}" && chmod +x "${localBin}"`, { timeout: 60000 });
         if (fs.existsSync(localBin)) {
             try { fs.chmodSync(localBin, 0o755); } catch (e) {}
             console.log('[ensureYtdl] Successfully installed yt-dlp to', localBin);
@@ -55,7 +55,7 @@ function ensureYtdl() {
     }
 
     try {
-        execSync(`curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /tmp/yt-dlp && chmod +x /tmp/yt-dlp`, { timeout: 45000 });
+        execSync(`curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o /tmp/yt-dlp && chmod +x /tmp/yt-dlp`, { timeout: 60000 });
         if (fs.existsSync('/tmp/yt-dlp')) {
             try { fs.chmodSync('/tmp/yt-dlp', 0o755); } catch (e) {}
             console.log('[ensureYtdl] Successfully installed yt-dlp to /tmp/yt-dlp');

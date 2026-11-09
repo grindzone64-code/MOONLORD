@@ -3,7 +3,7 @@ services:
     name: moon-lord-control-unit
     runtime: node
     plan: free
-    buildCommand: npm install && mkdir -p bin && (curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o bin/yt-dlp && chmod +x bin/yt-dlp || true)
+    buildCommand: npm install && mkdir -p bin && (curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o bin/yt-dlp && chmod +x bin/yt-dlp || true)
     startCommand: node index.js
     envVars:
       - key: NODE_VERSION

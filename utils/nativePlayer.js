@@ -571,48 +571,11 @@ class NativePlayer {
             fallbackTriggered = true;
             console.log(`[NativePlayer] Notice (${reason}). Activating secondary streaming engine for: "${track.title}"`);
 
-            // Secondary: @distube/ytdl-core in-process pure JS engine
-            if (isYouTubeUrl && ytdlCoreClient) {
-                try {
-                    console.log(`[NativePlayer] [Fallback YTDL-CORE] Streaming "${track.title}"...`);
-                    const ytdlStream = ytdlCoreClient.download(track.url, {
-                        filter: { hasAudio: true, hasVideo: false },
-                        highWaterMark: 1 << 25
-                    });
-                    ytdlStream.on('data', () => { hasOutputData = true; });
-                    ytdlStream.pipe(inputStream, { end: true });
-                    ytdlStream.on('error', (e) => {
-                        console.warn('[NativePlayer] YTDL-core fallback notice:', e.message);
-                        triggerTertiaryFallback();
-                    });
-                    return;
-                } catch (e) {}
-            }
-
-            triggerTertiaryFallback();
-        };
-
-        const triggerTertiaryFallback = () => {
-            // Tertiary: play-dl stream
-            try {
-                const playDl = require('play-dl');
-                if (isYouTubeUrl && playDl) {
-                    playDl.stream(track.url).then(source => {
-                        source.stream.on('data', () => { hasOutputData = true; });
-                        source.stream.pipe(inputStream, { end: true });
-                    }).catch(e => {
-                        console.warn('[NativePlayer] play-dl fallback notice:', e.message);
-                        triggerSoundCloudFallback();
-                    });
-                    return;
-                }
-            } catch (e) {}
-
+            // Primary fallback for datacenter/cloud hosting: SoundCloud stream (never blocked by IP bans)
             triggerSoundCloudFallback();
         };
 
         const triggerSoundCloudFallback = () => {
-            // Quaternary: SoundCloud fallback for datacenter/cloud IPs where YouTube blocks
             try {
                 const scTarget = `scsearch1:${track.title || 'audio'}`;
                 console.log(`[NativePlayer] [Fallback SoundCloud] Streaming via: "${scTarget}"`);
@@ -622,9 +585,29 @@ class NativePlayer {
                 scProc.stdout.on('data', () => { hasOutputData = true; });
                 scProc.stdout.pipe(inputStream, { end: true });
                 scProc.on('close', () => { inputStream.end(); });
+                scProc.on('error', () => {
+                    triggerPureJsFallback();
+                });
             } catch (e) {
-                inputStream.end();
+                triggerPureJsFallback();
             }
+        };
+
+        const triggerPureJsFallback = () => {
+            if (isYouTubeUrl && ytdlCoreClient) {
+                try {
+                    console.log(`[NativePlayer] [Fallback YTDL-CORE] Streaming "${track.title}"...`);
+                    const ytdlStream = ytdlCoreClient.download(track.url, {
+                        filter: { hasAudio: true, hasVideo: false },
+                        highWaterMark: 1 << 25
+                    });
+                    ytdlStream.on('data', () => { hasOutputData = true; });
+                    ytdlStream.pipe(inputStream, { end: true });
+                    ytdlStream.on('error', () => inputStream.end());
+                    return;
+                } catch (e) {}
+            }
+            inputStream.end();
         };
 
         // 1. PRIMARY ENGINE: High-Speed yt-dlp binary (Fastest, bypasses YouTube bot verification)
@@ -647,8 +630,22 @@ class NativePlayer {
                 const ytdlProc = spawn(ytdlExe, ytdlArgs, { windowsHide: true });
                 state.ytdlProc = ytdlProc;
 
+                let fallbackTimer = setTimeout(() => {
+                    if (!hasOutputData) {
+                        console.log(`[NativePlayer] Initial stream buffer timed out (datacenter/cloud IP notice). Activating fallback for "${track.title}"...`);
+                        if (state.ytdlProc === ytdlProc) {
+                            try { ytdlProc.kill('SIGKILL'); } catch (e) {}
+                        }
+                        triggerFallback('stream buffer timeout');
+                    }
+                }, 5000);
+
                 ytdlProc.stdout.on('data', () => {
                     hasOutputData = true;
+                    if (fallbackTimer) {
+                        clearTimeout(fallbackTimer);
+                        fallbackTimer = null;
+                    }
                 });
                 ytdlProc.stdout.pipe(inputStream, { end: false });
 
@@ -660,6 +657,10 @@ class NativePlayer {
                 });
 
                 ytdlProc.on('close', (code) => {
+                    if (fallbackTimer) {
+                        clearTimeout(fallbackTimer);
+                        fallbackTimer = null;
+                    }
                     if (code === 0) {
                         inputStream.end();
                     } else if (!hasOutputData) {
@@ -673,6 +674,10 @@ class NativePlayer {
                 });
 
                 ytdlProc.on('error', (err) => {
+                    if (fallbackTimer) {
+                        clearTimeout(fallbackTimer);
+                        fallbackTimer = null;
+                    }
                     console.error('[NativePlayer] yt-dlp spawn error:', err.message);
                     triggerFallback(err.message);
                 });
