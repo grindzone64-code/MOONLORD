@@ -2586,11 +2586,21 @@ document.addEventListener('DOMContentLoaded', () => {
         tokens.forEach(t => {
             const row = document.createElement('div');
             row.className = 'token-manage-item';
-            const title = t.tag ? tmEscape(t.tag) : (t.online ? 'Authorised' : (t.error ? `<span style="color:var(--danger)">Failed: ${tmEscape(t.error)}</span>` : 'Not started'));
+            let title = '';
+            if (t.online) {
+                title = `<span style="font-weight:600;color:var(--text-bright,#fff)">${tmEscape(t.tag || 'Authorised')}</span> <span class="badge" style="background:rgba(16,185,129,0.2);color:#10b981;font-size:0.7rem;padding:2px 6px;border-radius:4px;margin-left:6px;">Online</span>`;
+            } else if (t.error) {
+                title = `<span style="font-weight:600;color:var(--text-bright,#fff)">${tmEscape(t.tag || 'Unit #' + t.index)}</span> <span style="color:var(--danger,#ff4d4f);font-size:0.8rem;display:block;margin-top:2px;"><i class="fas fa-triangle-exclamation"></i> ${tmEscape(t.error)}</span>`;
+            } else if (t.tag) {
+                title = `<span style="font-weight:600;color:var(--text-bright,#fff)">${tmEscape(t.tag)}</span> <span style="color:var(--text-muted,#888);font-size:0.8rem;">(Offline - click Play to connect)</span>`;
+            } else {
+                title = `<span style="color:var(--text-muted,#888);">Not started (Click Play to connect)</span>`;
+            }
+
             row.innerHTML = `
                 <span class="tm-dot ${t.online ? 'on' : (t.error ? 'err' : 'off')}"></span>
                 <div class="tm-info">
-                    <span class="tm-title">${title}</span>
+                    <div class="tm-title">${title}</div>
                     <span class="tm-sub">${tmEscape(t.masked)}${t.userId ? ' · ' + t.userId : ''}</span>
                 </div>
                 <span class="tm-badge">#${t.index}</span>
@@ -2613,26 +2623,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 const action = btn.getAttribute('data-action');
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                let resStatus = '';
                 try {
                     const r = await callApi('/tokens/session', 'POST', { index, action });
-                    showToast(r.message || 'Done', r.status === 'success' ? 'success' : (r.status === 'error' ? 'danger' : 'info'));
+                    resStatus = r?.status || '';
+                    showToast(r?.message || 'Done', r?.status === 'success' ? 'success' : (r?.status === 'error' ? 'danger' : 'info'));
                 } catch (e) {
                     showToast('Connection error: ' + e.message, 'danger');
                 }
                 await loadTokenManager();
                 updateStats();
 
-                if (action === 'login') {
+                if (action === 'login' && resStatus !== 'error') {
                     let attempts = 0;
                     const pollTimer = setInterval(async () => {
                         attempts++;
                         await loadTokenManager();
                         updateStats();
                         const rowBtn = document.querySelector(`.tm-session[data-index="${index}"]`);
-                        if (!rowBtn || rowBtn.getAttribute('data-action') === 'logout' || attempts >= 10) {
+                        if (!rowBtn || rowBtn.getAttribute('data-action') === 'logout' || attempts >= 15) {
                             clearInterval(pollTimer);
                         }
-                    }, 2000);
+                    }, 1500);
                 }
             };
         });
@@ -2731,6 +2743,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
             }
+            await loadTokenManager();
+            updateStats();
         }
 
         btn.disabled = false;

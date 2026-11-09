@@ -179,9 +179,38 @@ function initializeClient(client, token, index) {
   /* ✅ READY EVENT + RPC */
   client.on('ready', async () => {
     console.log(`[Client ${index}] Logged in as ${client.user.tag}`);
+    const b = (global.bots || []).find(x => x.index === index);
+    if (b) {
+      b.error = null;
+      b.tag = client.user.tag;
+      b.userId = client.user.id;
+    }
     try {
       await client.user.setPresence({ activities: [], status: 'online' });
     } catch (e) { }
+  });
+
+  client.on('error', (err) => {
+    const msg = (err && err.message) ? err.message : String(err);
+    console.error(`[Client ${index}] Discord Client notice:`, msg);
+    const b = (global.bots || []).find(x => x.index === index);
+    if (b) b.error = msg;
+  });
+
+  client.on('shardDisconnect', (event, id) => {
+    const code = event?.code;
+    const reason = event?.reason || '';
+    console.warn(`[Client ${index}] Shard ${id} disconnected (${code}): ${reason}`);
+    const b = (global.bots || []).find(x => x.index === index);
+    if (b) {
+      if (code === 4004) {
+        b.error = 'Token was rejected or invalidated by Discord (4004 Authentication Failed)';
+      } else if (code === 4014) {
+        b.error = 'Disallowed Gateway Intents (4014)';
+      } else if (code) {
+        b.error = `Gateway disconnected: ${reason || 'Code ' + code}`;
+      }
+    }
   });
 
   // 🚩 DEBUG LOGS AS REQUESTED
@@ -248,19 +277,20 @@ if (tokens.length === 0) {
 
   /* 🔁 START CLIENTS */
   tokens.forEach((token, index) => {
-    console.log(`[SYSTEM] Preparing and logging in client ${index}...`);
+    console.log(`[SYSTEM] Preparing client ${index}...`);
 
     const client = new Discord.Client({
       readyStatus: false,
-      checkUpdate: false,
-      intents: ['GUILDS', 'GUILD_VOICE_STATES', 'GUILD_MESSAGES'],
-      partials: ['CHANNEL', 'MESSAGE']
+      checkUpdate: false
     });
 
-    global.bots.push({ client, token, index });
+    const botEntry = { client, token, index, error: null };
+    global.bots.push(botEntry);
     initializeClient(client, token, index);
     client.login(token).catch(err => {
-      console.error(`[SYSTEM] Client #${index} auto-login failed:`, err.message);
+      const msg = (err && err.message) ? err.message : (err && err.code ? `Gateway closed: ${err.code} ${err.reason || ''}` : String(err));
+      console.error(`[SYSTEM] Client #${index} auto-login notice:`, msg);
+      botEntry.error = msg;
     });
   });
 }

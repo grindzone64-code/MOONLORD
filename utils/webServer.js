@@ -105,6 +105,91 @@ class WebServer {
         return path.join(dataDir, `tokens_${lic}.txt`);
     }
 
+    static verifyDiscordToken(token) {
+        return new Promise((resolve) => {
+            if (!token || typeof token !== 'string') {
+                return resolve({ ok: false, error: 'Empty token provided' });
+            }
+            const cleanToken = token.trim().replace(/^["']|["']$/g, '').replace(/^(Bot|Bearer)\s*/i, '');
+            if (cleanToken.length < 20) {
+                return resolve({ ok: false, error: 'Token string is malformed or too short' });
+            }
+
+            const https = require('https');
+            const req = https.request('https://discord.com/api/v9/users/@me', {
+                method: 'GET',
+                headers: {
+                    'Authorization': cleanToken,
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
+                },
+                timeout: 8000
+            }, (res) => {
+                let data = '';
+                res.on('data', chunk => { data += chunk; });
+                res.on('end', () => {
+                    try {
+                        const json = JSON.parse(data);
+                        if (res.statusCode === 200 && json && json.id) {
+                            return resolve({
+                                ok: true,
+                                user: {
+                                    id: json.id,
+                                    username: json.username,
+                                    discriminator: json.discriminator || '0',
+                                    tag: json.username + (json.discriminator && json.discriminator !== '0' ? '#' + json.discriminator : ''),
+                                    global_name: json.global_name,
+                                    avatar: json.avatar,
+                                    email: json.email,
+                                    verified: Boolean(json.verified)
+                                }
+                            });
+                        }
+                        if (res.statusCode === 401) {
+                            return resolve({
+                                ok: false,
+                                code: 401,
+                                error: 'Invalid or expired token (Discord 401 Unauthorized). Please check your token or copy a fresh token from Discord developer console.'
+                            });
+                        }
+                        if (res.statusCode === 403) {
+                            return resolve({
+                                ok: false,
+                                code: 403,
+                                error: `Account verification required by Discord: ${json.message || '403 Forbidden'}. Log in via browser first.`
+                            });
+                        }
+                        if (res.statusCode === 429) {
+                            return resolve({
+                                ok: false,
+                                code: 429,
+                                error: 'Rate limited by Discord (429). Please wait a moment.'
+                            });
+                        }
+                        return resolve({
+                            ok: false,
+                            code: res.statusCode,
+                            error: json.message || `Discord HTTP ${res.statusCode}`
+                        });
+                    } catch (e) {
+                        return resolve({
+                            ok: false,
+                            error: `Failed to parse Discord response (${res.statusCode})`
+                        });
+                    }
+                });
+            });
+
+            req.on('timeout', () => {
+                req.destroy();
+                resolve({ ok: false, error: 'Discord API connection timed out (8s)' });
+            });
+            req.on('error', (err) => {
+                resolve({ ok: false, error: 'Network error connecting to Discord: ' + err.message });
+            });
+            req.end();
+        });
+    }
+
     createClientForBot(bot) {
         const Discord = global.Discord || require('discord.js-selfbot-v13');
         if (bot.client) {
@@ -113,9 +198,7 @@ class WebServer {
         }
         const client = new Discord.Client({
             readyStatus: false,
-            checkUpdate: false,
-            intents: ['GUILDS', 'GUILD_VOICE_STATES', 'GUILD_MESSAGES'],
-            partials: ['CHANNEL', 'MESSAGE']
+            checkUpdate: false
         });
         bot.client = client;
         bot.error = null;
@@ -126,18 +209,29 @@ class WebServer {
 
         client.once('ready', () => {
             bot.error = null;
+            if (client.user) {
+                bot.tag = client.user.tag;
+                bot.userId = client.user.id;
+            }
             console.log(`[Bot #${bot.index}] Successfully logged in as ${client.user?.tag} (${client.user?.id})`);
         });
 
         client.on('error', (err) => {
-            console.error(`[Bot #${bot.index}] Discord Client notice:`, err.message);
-            bot.error = err.message;
+            const msg = (err && err.message) ? err.message : String(err);
+            console.error(`[Bot #${bot.index}] Discord Client notice:`, msg);
+            bot.error = msg;
         });
 
         client.on('shardDisconnect', (event, id) => {
-            console.warn(`[Bot #${bot.index}] Shard ${id} disconnected (${event?.code}):`, event?.reason || '');
-            if (event?.code === 4004) {
-                bot.error = 'Token was rejected or invalidated by Discord (4004)';
+            const code = event?.code;
+            const reason = event?.reason || '';
+            console.warn(`[Bot #${bot.index}] Shard ${id} disconnected (${code}): ${reason}`);
+            if (code === 4004) {
+                bot.error = 'Token was rejected or invalidated by Discord (4004 Authentication Failed)';
+            } else if (code === 4014) {
+                bot.error = 'Disallowed Gateway Intents (4014)';
+            } else if (code) {
+                bot.error = `Gateway disconnected: ${reason || 'Code ' + code}`;
             }
         });
 
@@ -162,35 +256,27 @@ class WebServer {
                 }
             } catch (e) {}
 
-            // If this license has no tokens saved yet, inherit from global tokens.txt
+            // If this license has no tokens saved yet, share the existing global fleet if running
             if (tokens.length === 0) {
-                const candidates = [
-                    path.join(process.cwd(), 'tokens.txt'),
-                    path.join(__dirname, '..', 'tokens.txt'),
-                    process.env.PORTABLE_EXECUTABLE_DIR ? path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'tokens.txt') : null
-                ].filter(Boolean);
-                for (const c of candidates) {
-                    try {
-                        if (fs.existsSync(c)) {
-                            tokens = fs.readFileSync(c, 'utf8').split(/\r?\n/).map(t => t.trim()).filter(Boolean);
-                            if (tokens.length > 0) break;
-                        }
-                    } catch (e) {}
+                if (global.bots && global.bots.length > 0) {
+                    global.licenseBotPools.set(lic, global.bots);
+                    return global.bots;
                 }
+            } else {
+                tokens.forEach((token, index) => {
+                    const botEntry = { client: null, token, index, license: lic, error: null };
+                    botList.push(botEntry);
+                    try {
+                        const client = this.createClientForBot(botEntry);
+                        client.login(token).catch(err => {
+                            const msg = (err && err.message) ? err.message : (err && err.code ? `Gateway closed: ${err.code} ${err.reason || ''}` : String(err));
+                            console.error(`[License ${lic}] Unit #${index} login notice:`, msg);
+                            botEntry.error = msg;
+                        });
+                    } catch (e) {}
+                });
+                global.licenseBotPools.set(lic, botList);
             }
-
-            tokens.forEach((token, index) => {
-                const botEntry = { client: null, token, index, license: lic };
-                botList.push(botEntry);
-                try {
-                    const client = this.createClientForBot(botEntry);
-                    client.login(token).catch(err => {
-                        console.error(`[License ${lic}] Unit #${index} login failed:`, err.message);
-                        botEntry.error = err.message;
-                    });
-                } catch (e) {}
-            });
-            global.licenseBotPools.set(lic, botList);
         }
 
         const pool = global.licenseBotPools.get(lic);
@@ -736,9 +822,9 @@ class WebServer {
                 const masked = raw.length > 10 ? `${raw.slice(0, 6)}...${raw.slice(-4)}` : (raw || 'N/A');
                 return {
                     index: b.index ?? i,
-                    tag: b.client?.user?.tag || '',
+                    tag: b.client?.user?.tag || b.tag || '',
                     masked,
-                    userId: b.client?.user?.id || '',
+                    userId: b.client?.user?.id || b.userId || '',
                     online: b.client?.isReady() || false,
                     error: b.error || null,
                     status: b.client?.isReady() ? 'online' : (b.error ? 'error' : 'offline')
@@ -747,8 +833,8 @@ class WebServer {
             res.json({ status: 'success', tokens });
         });
 
-        // Tokens Add (Bulk & isolated per license)
-        this.app.post('/api/tokens/add', (req, res) => {
+        // Tokens Add (Bulk & isolated per license with pre-flight REST verification)
+        this.app.post('/api/tokens/add', async (req, res) => {
             const rawInput = (req.body.tokens || '').trim();
             const autoLogin = req.body.login !== false;
             if (!rawInput) {
@@ -802,30 +888,68 @@ class WebServer {
                     continue;
                 }
 
+                // Pre-flight REST verification check
+                const check = await WebServer.verifyDiscordToken(token);
+                if (!check.ok) {
+                    results.push({ ok: false, token: masked, message: check.error });
+                    const index = botPool.length;
+                    const botEntry = {
+                        client: null,
+                        token,
+                        index,
+                        license: lic || null,
+                        error: check.error,
+                        verified: false
+                    };
+                    botPool.push(botEntry);
+                    if (!lic && global.bots && !global.bots.includes(botEntry)) {
+                        global.bots.push(botEntry);
+                    }
+                    existingTokens.push(token);
+                    addedCount++;
+                    continue;
+                }
+
+                // Token is valid!
                 existingTokens.push(token);
                 addedCount++;
 
                 const index = botPool.length;
-                const botEntry = { client: null, token, index, license: lic || null };
+                const botEntry = {
+                    client: null,
+                    token,
+                    index,
+                    license: lic || null,
+                    userId: check.user.id,
+                    tag: check.user.tag,
+                    error: null,
+                    verified: true
+                };
                 botPool.push(botEntry);
                 if (!lic && global.bots && !global.bots.includes(botEntry)) {
                     global.bots.push(botEntry);
                 }
 
-                try {
-                    const client = this.createClientForBot(botEntry);
-                    if (autoLogin) {
+                if (autoLogin) {
+                    try {
+                        const client = this.createClientForBot(botEntry);
                         client.login(token).catch(err => {
-                            console.error(`[Token Manager] Login failed for unit #${index}:`, err.message);
-                            botEntry.error = err.message;
+                            const msg = (err && err.message) ? err.message : (err && err.code ? `Gateway closed: ${err.code} ${err.reason || ''}` : String(err));
+                            console.error(`[Token Manager] Login notice for #${index}:`, msg);
+                            botEntry.error = msg;
                         });
+                    } catch (err) {
+                        console.error(`[Token Manager] Failed to initialize unit #${index}:`, err);
+                        botEntry.error = err.message;
                     }
-                } catch (err) {
-                    console.error(`[Token Manager] Failed to initialize unit #${index}:`, err);
-                    botEntry.error = err.message;
                 }
 
-                results.push({ ok: true, token: masked, message: autoLogin ? 'Enrolled & logging in' : 'Enrolled' });
+                results.push({
+                    ok: true,
+                    token: masked,
+                    tag: check.user.tag,
+                    message: autoLogin ? `Enrolled as ${check.user.tag} & connecting` : `Enrolled as ${check.user.tag}`
+                });
             }
 
             try {
@@ -841,41 +965,50 @@ class WebServer {
             });
         });
 
-        // Token Session (isolated & reconnecting)
+        // Token Session (isolated & reconnecting with pre-flight check)
         this.app.post('/api/tokens/session', async (req, res) => {
             const index = parseInt(req.body.index, 10);
             const action = req.body.action;
             const botPool = this.getBotPool(req);
             const bot = botPool.find(b => b.index === index);
             if (!bot) {
-                return res.status(404).json({ status: 'error', message: `Unit #${index} not found` });
+                return res.status(404).json({ status: 'error', message: `Unit #${index} not found in registry` });
             }
 
             if (action === 'login') {
                 if (bot.client?.isReady()) {
-                    return res.json({ status: 'success', message: `Unit #${index} (${bot.client.user?.tag || 'Online'}) is already online` });
+                    return res.json({ status: 'success', message: `Unit #${index} (${bot.client.user?.tag || bot.tag || 'Online'}) is already connected` });
                 }
 
                 try {
+                    // Pre-flight REST verification check
+                    const check = await WebServer.verifyDiscordToken(bot.token);
+                    if (!check.ok) {
+                        bot.error = check.error;
+                        bot.verified = false;
+                        return res.json({
+                            status: 'error',
+                            message: `Unit #${index} verification failed: ${check.error}`
+                        });
+                    }
+
+                    // Token verified with Discord REST API
+                    bot.tag = check.user.tag;
+                    bot.userId = check.user.id;
+                    bot.error = null;
+                    bot.verified = true;
+
                     const client = this.createClientForBot(bot);
 
-                    // Initiate login in background without blocking / killing connection
                     client.login(bot.token).catch(err => {
-                        console.error(`[Session] Login failed for #${index}:`, err.message);
-                        let friendlyErr = err.message;
-                        if (err.message.includes('TOKEN_INVALID') || err.message.includes('An invalid token')) {
-                            friendlyErr = 'Invalid token or token was reset';
-                        } else if (err.message.includes('401') || err.message.includes('Unauthorized')) {
-                            friendlyErr = 'Unauthorized: token is expired or revoked';
-                        } else if (err.message.includes('DISALLOWED_INTENTS')) {
-                            friendlyErr = 'Disallowed Gateway Intents';
-                        }
-                        bot.error = friendlyErr;
+                        const msg = (err && err.message) ? err.message : (err && err.code ? `Gateway closed: ${err.code} ${err.reason || ''}` : String(err));
+                        console.error(`[Session] Login notice for #${index}:`, msg);
+                        bot.error = msg;
                     });
 
-                    // Wait briefly up to 2.5 seconds to catch immediate success or immediate rejection
+                    // Wait up to 3.5 seconds to catch immediate ready or reject
                     await new Promise(resolve => {
-                        const t = setTimeout(resolve, 2500);
+                        const t = setTimeout(resolve, 3500);
                         if (client.isReady() || bot.error) {
                             clearTimeout(t);
                             return resolve();
@@ -895,27 +1028,32 @@ class WebServer {
                         bot.error = null;
                         return res.json({
                             status: 'success',
-                            message: `Unit #${index} started successfully: ${client.user?.tag}`,
-                            tag: client.user?.tag,
-                            userId: client.user?.id
+                            message: `Unit #${index} logged in successfully as ${client.user?.tag || bot.tag}!`,
+                            tag: client.user?.tag || bot.tag,
+                            userId: client.user?.id || bot.userId
                         });
                     } else {
                         return res.json({
                             status: 'success',
-                            message: `Unit #${index} connecting to Discord gateway... status will refresh automatically.`
+                            message: `Unit #${index} (${bot.tag}) authenticated! Syncing Discord servers... status will refresh automatically.`
                         });
                     }
                 } catch (err) {
-                    console.error(`[Session] Synchronous error for #${index}:`, err.message);
-                    bot.error = err.message;
+                    const msg = (err && err.message) ? err.message : String(err);
+                    console.error(`[Session] Synchronous error for #${index}:`, msg);
+                    bot.error = msg;
                     return res.json({
                         status: 'error',
-                        message: `Unit #${index} error: ${err.message}`
+                        message: `Unit #${index} error: ${msg}`
                     });
                 }
             } else if (action === 'logout') {
                 if (bot.client) {
-                    try { bot.client.destroy(); } catch (e) {}
+                    try {
+                        bot.client.removeAllListeners();
+                        bot.client.destroy();
+                        bot.client = null;
+                    } catch (e) {}
                 }
                 bot.error = null;
                 return res.json({ status: 'success', message: `Unit #${index} logged out` });
@@ -937,7 +1075,10 @@ class WebServer {
             const botIdx = botPool.findIndex(b => b.index === index);
             if (botIdx !== -1) {
                 const [removed] = botPool.splice(botIdx, 1);
-                try { removed.client?.destroy(); } catch (e) {}
+                try {
+                    removed.client?.removeAllListeners();
+                    removed.client?.destroy();
+                } catch (e) {}
 
                 if (!lic && global.bots && global.bots !== botPool) {
                     const gIdx = global.bots.findIndex(b => b.index === index);
@@ -955,12 +1096,76 @@ class WebServer {
             res.json({ status: 'error', message: `Unit #${index} not found` });
         });
 
-        // Token Validity Check (isolated)
-        this.app.post('/api/tokens/check-validity', (req, res) => {
+        // Token Validity Check (Real Discord REST Audit)
+        this.app.post('/api/tokens/check-validity', async (req, res) => {
             const bots = this.getBotPool(req);
-            const valid = bots.filter(b => b.client?.isReady()).length;
-            const invalid = bots.length - valid;
-            res.json({ status: 'success', data: { valid, invalid, locked: 0 } });
+            let valid = 0;
+            let invalid = 0;
+            let locked = 0;
+
+            for (const b of bots) {
+                const check = await WebServer.verifyDiscordToken(b.token);
+                if (check.ok) {
+                    valid++;
+                    b.tag = check.user.tag;
+                    b.userId = check.user.id;
+                    b.verified = true;
+                    b.error = null;
+                } else if (check.code === 403) {
+                    locked++;
+                    b.verified = false;
+                    b.error = check.error;
+                } else {
+                    invalid++;
+                    b.verified = false;
+                    b.error = check.error;
+                }
+            }
+
+            res.json({
+                status: 'success',
+                data: { valid, invalid, locked, total: bots.length }
+            });
+        });
+
+        // Token Extract (Get user info for all tokens)
+        this.app.get('/api/tokens/extract', async (req, res) => {
+            const bots = this.getBotPool(req);
+            const profiles = [];
+            for (const b of bots) {
+                const check = await WebServer.verifyDiscordToken(b.token);
+                profiles.push({
+                    index: b.index,
+                    masked: b.token ? `${b.token.slice(0, 6)}...${b.token.slice(-4)}` : 'N/A',
+                    valid: check.ok,
+                    user: check.ok ? check.user : null,
+                    error: check.ok ? null : check.error
+                });
+            }
+            res.json({
+                status: 'success',
+                message: `Extracted profile details for ${profiles.length} units`,
+                profiles
+            });
+        });
+
+        // Auto-recover disconnected bots
+        this.app.post('/api/tokens/auto-recover', async (req, res) => {
+            const bots = this.getBotPool(req);
+            let recovered = 0;
+            for (const b of bots) {
+                if (!b.client || !b.client.isReady()) {
+                    try {
+                        const client = this.createClientForBot(b);
+                        client.login(b.token).catch(() => {});
+                        recovered++;
+                    } catch (e) {}
+                }
+            }
+            res.json({
+                status: 'success',
+                message: `Attempting reconnection for ${recovered} inactive units...`
+            });
         });
 
         // Music Playback Endpoints
