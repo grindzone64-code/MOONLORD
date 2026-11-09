@@ -1055,7 +1055,9 @@ class WebServer {
                 // 2. Connect all target bots to voice channel first in parallel via NativePlayer
                 await Promise.allSettled(bots.map(async (bot) => {
                     const botState = nativePlayer.getBotState(bot);
-                    let isReady = botState.voiceConnection && botState.voiceConnection.state?.status === 'ready';
+                    let isReady = botState.voiceConnection &&
+                        botState.voiceConnection.state?.status === 'ready' &&
+                        (!resolvedChannelId || botState.channelId === resolvedChannelId);
 
                     if (!isReady) {
                         let targetChannel = null;
@@ -1084,7 +1086,7 @@ class WebServer {
                 if (readyBots.length === 0) {
                     return res.json({
                         status: 'error',
-                        message: 'No bots connected to a voice channel. Please join a voice channel first.'
+                        message: 'No bots connected to a voice channel. Please select a Voice Channel from the dropdown or join one first.'
                     });
                 }
 

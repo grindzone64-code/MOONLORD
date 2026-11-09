@@ -938,13 +938,59 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('refresh-vc-list').onclick = fetchServerChannels;
     }
 
+    // Music Voice Channels helper
+    async function loadMusicVoiceChannels() {
+        const select = document.getElementById('music-channel-select');
+        if (!select) return;
+        try {
+            const res = await callApi('/voice/channels', 'POST', {});
+            if (res && res.status === 'success' && Array.isArray(res.channels)) {
+                const currentVal = select.value;
+                select.innerHTML = '<option value="">Auto-Detect (Current VC or Owner VC)</option>';
+                res.channels.forEach(ch => {
+                    const opt = document.createElement('option');
+                    opt.value = ch.id;
+                    opt.textContent = `${ch.guildName ? `[${ch.guildName}] ` : ''}${ch.name || ch.id}`;
+                    select.appendChild(opt);
+                });
+                if (currentVal) select.value = currentVal;
+            }
+        } catch (e) {}
+    }
+
+    const musicSelectEl = document.getElementById('music-channel-select');
+    if (musicSelectEl) {
+        musicSelectEl.onchange = () => {
+            const mInput = document.getElementById('music-channel-id');
+            if (mInput && musicSelectEl.value) {
+                mInput.value = musicSelectEl.value;
+            }
+        };
+    }
+
+    const refreshVcsBtn = document.getElementById('refresh-music-vcs');
+    if (refreshVcsBtn) {
+        refreshVcsBtn.onclick = async () => {
+            refreshVcsBtn.disabled = true;
+            refreshVcsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            await loadMusicVoiceChannels();
+            refreshVcsBtn.disabled = false;
+            refreshVcsBtn.innerHTML = '<i class="fas fa-arrows-rotate"></i>';
+            showToast('Voice channels scanned', 'info');
+        };
+    }
+
+    // Load music voice channels initially
+    setTimeout(loadMusicVoiceChannels, 1500);
+
     // Music Player
     document.getElementById('play-music').onclick = async () => {
         const queryInput = document.getElementById('music-query');
         const query = queryInput ? queryInput.value.trim() : '';
+        const mSelect = document.getElementById('music-channel-select');
         const mInput = document.getElementById('music-channel-id');
         const vInput = document.getElementById('voice-channel-id');
-        const channel_id = (mInput && mInput.value.trim()) || (vInput && vInput.value.trim()) || '';
+        const channel_id = (mInput && mInput.value.trim()) || (mSelect && mSelect.value.trim()) || (vInput && vInput.value.trim()) || '';
         const deaf = document.getElementById('music-deafen')?.checked ?? false;
         const mute = document.getElementById('music-mute')?.checked ?? false;
         const targetsData = getTargets(true);

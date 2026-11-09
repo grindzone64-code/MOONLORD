@@ -482,6 +482,19 @@
                         </div>
                         <div class="card-body">
                             <div class="input-group">
+                                <label for="music-channel-id">Target Voice Channel</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <select id="music-channel-select" style="flex: 1;">
+                                        <option value="">Auto-Detect (Current VC or Owner VC)</option>
+                                    </select>
+                                    <input type="text" id="music-channel-id" placeholder="Or paste Voice Channel ID" style="max-width: 220px;">
+                                    <button id="refresh-music-vcs" type="button" class="btn btn-secondary" title="Scan available Voice Channels">
+                                        <i class="fas fa-arrows-rotate"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="input-group">
                                 <label for="music-query">Search Query or URL</label>
                                 <input type="text" id="music-query" placeholder="Track title or link">
                             </div>

@@ -153,7 +153,12 @@ function getFfmpegExecutable() {
     }
     try {
         const ffStatic = require('ffmpeg-static');
-        if (ffStatic && fs.existsSync(ffStatic)) return ffStatic;
+        if (ffStatic && fs.existsSync(ffStatic)) {
+            if (!isWin) {
+                try { fs.chmodSync(ffStatic, 0o755); } catch (e) {}
+            }
+            return ffStatic;
+        }
     } catch (e) {}
     return 'ffmpeg';
 }
@@ -566,6 +571,17 @@ class NativePlayer {
         const isYouTubeUrl = /^(https?:\/\/)?(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\/.+/i.test(track.url);
         const streamTarget = isYouTubeUrl ? track.url : (track.url?.startsWith('http') ? track.url : `ytsearch1:${track.title}`);
 
+        const cleanTitleForSearch = (title) => {
+            if (!title) return 'music';
+            return title
+                .replace(/https?:\/\/\S+/gi, '')
+                .replace(/[\[\(][^\]\)]*[\)\]]/g, ' ')
+                .replace(/\b(8k|4k|1080p|720p|hd|video song|full song|official video|lyric video|music video|official|audio|remix|feat\.?|ft\.?)\b/gi, ' ')
+                .replace(/[|/\\_-]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim() || title;
+        };
+
         const triggerFallback = (reason) => {
             if (fallbackTriggered || hasOutputData) return;
             fallbackTriggered = true;
@@ -577,9 +593,10 @@ class NativePlayer {
 
         const triggerSoundCloudFallback = () => {
             try {
-                const scTarget = `scsearch1:${track.title || 'audio'}`;
+                const searchQ = cleanTitleForSearch(track.title || 'audio');
+                const scTarget = `scsearch1:${searchQ}`;
                 console.log(`[NativePlayer] [Fallback SoundCloud] Streaming via: "${scTarget}"`);
-                const scArgs = ['--no-warnings', '-4', '--geo-bypass', '-f', 'ba/b', '-o', '-', '--no-playlist', '--quiet', scTarget];
+                const scArgs = ['--no-warnings', '--js-runtimes', 'node', '-4', '--geo-bypass', '-f', 'ba/b', '-o', '-', '--no-playlist', '--quiet', scTarget];
                 const scProc = spawn(ytdlExe, scArgs, { windowsHide: true });
                 state.ytdlProc = scProc;
                 scProc.stdout.on('data', () => { hasOutputData = true; });
@@ -617,6 +634,7 @@ class NativePlayer {
                 console.log(`[NativePlayer] [YT-DLP] Streaming "${track.title}" via ${ytdlExe} [seek=${seekSec}s]`);
                 const ytdlArgs = [
                     '--no-warnings',
+                    '--js-runtimes', 'node',
                     '-4',
                     '--geo-bypass',
                     ...cookieArgs,
@@ -638,7 +656,7 @@ class NativePlayer {
                         }
                         triggerFallback('stream buffer timeout');
                     }
-                }, 5000);
+                }, 25000);
 
                 ytdlProc.stdout.on('data', () => {
                     hasOutputData = true;
