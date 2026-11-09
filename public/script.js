@@ -408,8 +408,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- API HANDLERS ---
-    const DEFAULT_CLOUD_HOST = 'https://moonlord1.onrender.com';
-    const LIFETIME_FALLBACK_HOST = 'https://moonlord1.onrender.com';
+    const DEFAULT_CLOUD_HOST = 'https://moonlord1-4.onrender.com';
+    const LIFETIME_FALLBACK_HOST = 'https://moonlord1-4.onrender.com';
     const isAndroidDevice = /Android/i.test(navigator.userAgent) || 
         (typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.host.includes('androidplatform.net')));
 
@@ -457,7 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isAndroidDevice && typeof window !== 'undefined' && window.location.protocol.startsWith('http') && !window.location.host.includes('appassets.androidplatform.net')) {
             return '/api';
         }
-        return 'https://moonlord1.onrender.com/api';
+        return 'https://moonlord1-4.onrender.com/api';
     }
 
     function setBackendOnline(isOnline) {
@@ -476,11 +476,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Manual server host config on tap
     window.editServerHost = function() {
         const storage = (typeof safeStorage !== 'undefined' ? safeStorage : (typeof localStorage !== 'undefined' ? localStorage : null));
-        const cur = (storage ? storage.getItem('moonlord_api_host') : null) || 'https://moonlord1.onrender.com';
+        const cur = (storage ? storage.getItem('moonlord_api_host') : null) || 'https://moonlord1-4.onrender.com';
         const input = prompt(
             "Configure Server Host / IP Address:\n\n" +
-            "• Active Render Cloud Host: https://moonlord1.onrender.com\n" +
-            "• Fixed Lifetime Tunnel: https://afraid-kangaroo-40.loca.lt\n" +
+            "• Active Render Cloud Host: https://moonlord1-4.onrender.com\n" +
+            "• Fixed Lifetime Tunnel: https://moonlord-control-gate.loca.lt\n" +
             "• Local PC on Same Wi-Fi: http://192.168.1.3:5000\n" +
             "• Localhost: http://127.0.0.1:5000\n\nEnter server address:",
             cur
@@ -546,6 +546,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // 2. Candidate Fallback List (Active Render cloud host first!)
         const saved = storage ? storage.getItem('moonlord_api_host') : null;
         const candidates = [
+            'https://moonlord1-4.onrender.com',
+            'https://moonlord-control-gate.loca.lt',
             'https://moonlord1.onrender.com',
             'https://afraid-kangaroo-40.loca.lt',
             saved,
