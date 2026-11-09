@@ -2621,6 +2621,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 await loadTokenManager();
                 updateStats();
+
+                if (action === 'login') {
+                    let attempts = 0;
+                    const pollTimer = setInterval(async () => {
+                        attempts++;
+                        await loadTokenManager();
+                        updateStats();
+                        const rowBtn = document.querySelector(`.tm-session[data-index="${index}"]`);
+                        if (!rowBtn || rowBtn.getAttribute('data-action') === 'logout' || attempts >= 10) {
+                            clearInterval(pollTimer);
+                        }
+                    }, 2000);
+                }
             };
         });
 

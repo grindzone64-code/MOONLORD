@@ -129,6 +129,18 @@ class WebServer {
             console.log(`[Bot #${bot.index}] Successfully logged in as ${client.user?.tag} (${client.user?.id})`);
         });
 
+        client.on('error', (err) => {
+            console.error(`[Bot #${bot.index}] Discord Client notice:`, err.message);
+            bot.error = err.message;
+        });
+
+        client.on('shardDisconnect', (event, id) => {
+            console.warn(`[Bot #${bot.index}] Shard ${id} disconnected (${event?.code}):`, event?.reason || '');
+            if (event?.code === 4004) {
+                bot.error = 'Token was rejected or invalidated by Discord (4004)';
+            }
+        });
+
         return client;
     }
 
@@ -847,17 +859,35 @@ class WebServer {
                 try {
                     const client = this.createClientForBot(bot);
 
-                    // Await login with timeout so the user gets real feedback
-                    await Promise.race([
-                        client.login(bot.token),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('Discord login timed out (10s)')), 10000))
-                    ]);
+                    // Initiate login in background without blocking / killing connection
+                    client.login(bot.token).catch(err => {
+                        console.error(`[Session] Login failed for #${index}:`, err.message);
+                        let friendlyErr = err.message;
+                        if (err.message.includes('TOKEN_INVALID') || err.message.includes('An invalid token')) {
+                            friendlyErr = 'Invalid token or token was reset';
+                        } else if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+                            friendlyErr = 'Unauthorized: token is expired or revoked';
+                        } else if (err.message.includes('DISALLOWED_INTENTS')) {
+                            friendlyErr = 'Disallowed Gateway Intents';
+                        }
+                        bot.error = friendlyErr;
+                    });
 
-                    // Wait up to 3s for client to become ready
-                    if (!client.isReady()) {
-                        await new Promise(resolve => {
-                            const t = setTimeout(resolve, 3000);
-                            client.once('ready', () => { clearTimeout(t); resolve(); });
+                    // Wait briefly up to 2.5 seconds to catch immediate success or immediate rejection
+                    await new Promise(resolve => {
+                        const t = setTimeout(resolve, 2500);
+                        if (client.isReady() || bot.error) {
+                            clearTimeout(t);
+                            return resolve();
+                        }
+                        client.once('ready', () => { clearTimeout(t); resolve(); });
+                        client.once('error', () => { clearTimeout(t); resolve(); });
+                    });
+
+                    if (bot.error) {
+                        return res.json({
+                            status: 'error',
+                            message: `Unit #${index} login failed: ${bot.error}`
                         });
                     }
 
@@ -871,24 +901,16 @@ class WebServer {
                         });
                     } else {
                         return res.json({
-                            status: 'info',
-                            message: `Unit #${index} connecting to Discord gateway...`
+                            status: 'success',
+                            message: `Unit #${index} connecting to Discord gateway... status will refresh automatically.`
                         });
                     }
                 } catch (err) {
-                    console.error(`[Session] Login failed for #${index}:`, err.message);
-                    let friendlyErr = err.message;
-                    if (err.message.includes('TOKEN_INVALID') || err.message.includes('An invalid token')) {
-                        friendlyErr = 'Invalid token or token was reset';
-                    } else if (err.message.includes('401') || err.message.includes('Unauthorized')) {
-                        friendlyErr = 'Unauthorized: token is expired or revoked';
-                    } else if (err.message.includes('DISALLOWED_INTENTS')) {
-                        friendlyErr = 'Disallowed Gateway Intents';
-                    }
-                    bot.error = friendlyErr;
+                    console.error(`[Session] Synchronous error for #${index}:`, err.message);
+                    bot.error = err.message;
                     return res.json({
                         status: 'error',
-                        message: `Unit #${index} login failed: ${friendlyErr}`
+                        message: `Unit #${index} error: ${err.message}`
                     });
                 }
             } else if (action === 'logout') {
