@@ -110,18 +110,16 @@ function getYtdlExecutable() {
         }
     }
 
-    // On Linux/Cloud, if yt-dlp is missing, use ensureYtdl fallback
-    if (!isWin) {
-        try {
-            const { ensureYtdl } = require('./ensureYtdl');
-            const installed = ensureYtdl();
-            if (installed && fs.existsSync(installed)) {
-                return installed;
-            }
-        } catch (e) {}
-    }
+    // Check ensureYtdl fallback if binary not found
+    try {
+        const { ensureYtdl } = require('./ensureYtdl');
+        const installed = ensureYtdl();
+        if (installed && fs.existsSync(installed)) {
+            return installed;
+        }
+    } catch (e) {}
 
-    return 'yt-dlp';
+    return isWin ? 'yt-dlp.exe' : 'yt-dlp';
 }
 
 // Helper: locate ffmpeg binary across environments
@@ -582,24 +580,38 @@ class NativePlayer {
                         highWaterMark: 1 << 25
                     });
                     ytdlStream.on('data', () => { hasOutputData = true; });
-                    ytdlStream.pipe(inputStream);
-                    ytdlStream.on('error', (e) => console.warn('[NativePlayer] YTDL-core fallback notice:', e.message));
+                    ytdlStream.pipe(inputStream, { end: true });
+                    ytdlStream.on('error', (e) => {
+                        console.warn('[NativePlayer] YTDL-core fallback notice:', e.message);
+                        triggerTertiaryFallback();
+                    });
                     return;
                 } catch (e) {}
             }
 
+            triggerTertiaryFallback();
+        };
+
+        const triggerTertiaryFallback = () => {
             // Tertiary: play-dl stream
             try {
                 const playDl = require('play-dl');
                 if (isYouTubeUrl && playDl) {
                     playDl.stream(track.url).then(source => {
                         source.stream.on('data', () => { hasOutputData = true; });
-                        source.stream.pipe(inputStream);
-                    }).catch(e => console.warn('[NativePlayer] play-dl fallback notice:', e.message));
+                        source.stream.pipe(inputStream, { end: true });
+                    }).catch(e => {
+                        console.warn('[NativePlayer] play-dl fallback notice:', e.message);
+                        triggerSoundCloudFallback();
+                    });
                     return;
                 }
             } catch (e) {}
 
+            triggerSoundCloudFallback();
+        };
+
+        const triggerSoundCloudFallback = () => {
             // Quaternary: SoundCloud fallback for datacenter/cloud IPs where YouTube blocks
             try {
                 const scTarget = `scsearch1:${track.title || 'audio'}`;
@@ -608,8 +620,11 @@ class NativePlayer {
                 const scProc = spawn(ytdlExe, scArgs, { windowsHide: true });
                 state.ytdlProc = scProc;
                 scProc.stdout.on('data', () => { hasOutputData = true; });
-                scProc.stdout.pipe(inputStream);
-            } catch (e) {}
+                scProc.stdout.pipe(inputStream, { end: true });
+                scProc.on('close', () => { inputStream.end(); });
+            } catch (e) {
+                inputStream.end();
+            }
         };
 
         // 1. PRIMARY ENGINE: High-Speed yt-dlp binary (Fastest, bypasses YouTube bot verification)
@@ -622,7 +637,6 @@ class NativePlayer {
                     '-4',
                     '--geo-bypass',
                     ...cookieArgs,
-                    '--extractor-args', 'youtube:player_client=android,web,visionos',
                     '-f', 'ba/b',
                     '-o', '-',
                     '--no-playlist',
@@ -636,7 +650,7 @@ class NativePlayer {
                 ytdlProc.stdout.on('data', () => {
                     hasOutputData = true;
                 });
-                ytdlProc.stdout.pipe(inputStream);
+                ytdlProc.stdout.pipe(inputStream, { end: false });
 
                 ytdlProc.stderr.on('data', (d) => {
                     const errStr = d.toString().trim();
@@ -646,8 +660,12 @@ class NativePlayer {
                 });
 
                 ytdlProc.on('close', (code) => {
-                    if (!hasOutputData && code !== 0) {
+                    if (code === 0) {
+                        inputStream.end();
+                    } else if (!hasOutputData) {
                         triggerFallback(`yt-dlp exited with code ${code}`);
+                    } else {
+                        inputStream.end();
                     }
                     if (state.ytdlProc === ytdlProc && !fallbackTriggered) {
                         state.ytdlProc = null;

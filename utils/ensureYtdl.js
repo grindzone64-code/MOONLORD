@@ -4,11 +4,20 @@ const { execSync } = require('child_process');
 
 function ensureYtdl() {
     if (process.platform === 'win32') {
-        const winBin = path.join(__dirname, '..', 'bin', 'yt-dlp.exe');
+        const binDir = path.join(__dirname, '..', 'bin');
+        const winBin = path.join(binDir, 'yt-dlp.exe');
         if (fs.existsSync(winBin)) return winBin;
         const winRoot = path.join(__dirname, '..', 'yt-dlp.exe');
         if (fs.existsSync(winRoot)) return winRoot;
-        return null;
+        try {
+            if (!fs.existsSync(binDir)) fs.mkdirSync(binDir, { recursive: true });
+            console.log('[ensureYtdl] Downloading standalone yt-dlp.exe for Windows...');
+            execSync(`curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe -o "${winBin}"`, { timeout: 60000 });
+            if (fs.existsSync(winBin)) return winBin;
+        } catch (e) {
+            console.warn('[ensureYtdl] Windows download notice:', e.message);
+        }
+        return 'yt-dlp.exe';
     }
 
     const binDir = path.join(__dirname, '..', 'bin');

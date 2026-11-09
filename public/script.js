@@ -408,8 +408,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- API HANDLERS ---
-    const DEFAULT_CLOUD_HOST = 'https://moonlord-3.onrender.com';
-    const LIFETIME_FALLBACK_HOST = 'https://moonlord-3.onrender.com';
+    const DEFAULT_CLOUD_HOST = 'https://moonlord1.onrender.com';
+    const LIFETIME_FALLBACK_HOST = 'https://moonlord1.onrender.com';
     const isAndroidDevice = /Android/i.test(navigator.userAgent) || 
         (typeof window !== 'undefined' && (window.location.protocol === 'file:' || window.location.host.includes('androidplatform.net')));
 
