@@ -122,11 +122,40 @@ class WebServer {
                     'Authorization': cleanToken,
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
                 },
-                timeout: 8000
+                timeout: 6000
             }, (res) => {
                 let data = '';
                 res.on('data', chunk => { data += chunk; });
                 res.on('end', () => {
+                    // 1. If rate limited (429), never block login - fallback immediately to Gateway
+                    if (res.statusCode === 429) {
+                        return resolve({
+                            ok: true,
+                            rateLimited: true,
+                            code: 429,
+                            notice: 'Discord REST rate limited (429). Proceeding via Gateway...'
+                        });
+                    }
+
+                    // 2. Explicit 401 Unauthorized
+                    if (res.statusCode === 401) {
+                        return resolve({
+                            ok: false,
+                            code: 401,
+                            error: 'Invalid or expired token (Discord 401 Unauthorized). Please check your token or copy a fresh token from Discord developer console.'
+                        });
+                    }
+
+                    // 3. Explicit 403 Forbidden
+                    if (res.statusCode === 403) {
+                        return resolve({
+                            ok: false,
+                            code: 403,
+                            error: 'Discord account requires verification (403 Forbidden). Log in via browser first.'
+                        });
+                    }
+
+                    // 4. Try parsing JSON for user profile
                     try {
                         const json = JSON.parse(data);
                         if (res.statusCode === 200 && json && json.id) {
@@ -144,47 +173,28 @@ class WebServer {
                                 }
                             });
                         }
-                        if (res.statusCode === 401) {
-                            return resolve({
-                                ok: false,
-                                code: 401,
-                                error: 'Invalid or expired token (Discord 401 Unauthorized). Please check your token or copy a fresh token from Discord developer console.'
-                            });
-                        }
-                        if (res.statusCode === 403) {
-                            return resolve({
-                                ok: false,
-                                code: 403,
-                                error: `Account verification required by Discord: ${json.message || '403 Forbidden'}. Log in via browser first.`
-                            });
-                        }
-                        if (res.statusCode === 429) {
-                            return resolve({
-                                ok: false,
-                                code: 429,
-                                error: 'Rate limited by Discord (429). Please wait a moment.'
-                            });
-                        }
-                        return resolve({
-                            ok: false,
-                            code: res.statusCode,
-                            error: json.message || `Discord HTTP ${res.statusCode}`
-                        });
                     } catch (e) {
+                        // Non-JSON response (e.g. Cloudflare HTML, proxy challenge) - never block login!
                         return resolve({
-                            ok: false,
-                            error: `Failed to parse Discord response (${res.statusCode})`
+                            ok: true,
+                            code: res.statusCode,
+                            notice: `Non-JSON Discord response (${res.statusCode})`
                         });
                     }
+
+                    return resolve({
+                        ok: true,
+                        code: res.statusCode
+                    });
                 });
             });
 
             req.on('timeout', () => {
                 req.destroy();
-                resolve({ ok: false, error: 'Discord API connection timed out (8s)' });
+                resolve({ ok: true, notice: 'Discord API connection timed out. Falling back to Gateway.' });
             });
             req.on('error', (err) => {
-                resolve({ ok: false, error: 'Network error connecting to Discord: ' + err.message });
+                resolve({ ok: true, notice: 'Network notice: ' + err.message + '. Falling back to Gateway.' });
             });
             req.end();
         });
@@ -888,9 +898,9 @@ class WebServer {
                     continue;
                 }
 
-                // Pre-flight REST verification check
+                // Pre-flight REST verification check (non-blocking fallback)
                 const check = await WebServer.verifyDiscordToken(token);
-                if (!check.ok) {
+                if (!check.ok && check.code === 401) {
                     results.push({ ok: false, token: masked, message: check.error });
                     const index = botPool.length;
                     const botEntry = {
@@ -910,7 +920,6 @@ class WebServer {
                     continue;
                 }
 
-                // Token is valid!
                 existingTokens.push(token);
                 addedCount++;
 
@@ -920,10 +929,10 @@ class WebServer {
                     token,
                     index,
                     license: lic || null,
-                    userId: check.user.id,
-                    tag: check.user.tag,
+                    userId: check.user?.id || null,
+                    tag: check.user?.tag || null,
                     error: null,
-                    verified: true
+                    verified: Boolean(check.user)
                 };
                 botPool.push(botEntry);
                 if (!lic && global.bots && !global.bots.includes(botEntry)) {
@@ -947,8 +956,8 @@ class WebServer {
                 results.push({
                     ok: true,
                     token: masked,
-                    tag: check.user.tag,
-                    message: autoLogin ? `Enrolled as ${check.user.tag} & connecting` : `Enrolled as ${check.user.tag}`
+                    tag: check.user?.tag || null,
+                    message: autoLogin ? (check.user ? `Enrolled as ${check.user.tag} & connecting` : 'Enrolled & connecting via Gateway') : 'Enrolled'
                 });
             }
 
@@ -981,9 +990,9 @@ class WebServer {
                 }
 
                 try {
-                    // Pre-flight REST verification check
+                    // Pre-flight REST verification check (non-blocking fallback)
                     const check = await WebServer.verifyDiscordToken(bot.token);
-                    if (!check.ok) {
+                    if (!check.ok && check.code === 401) {
                         bot.error = check.error;
                         bot.verified = false;
                         return res.json({
@@ -992,11 +1001,13 @@ class WebServer {
                         });
                     }
 
-                    // Token verified with Discord REST API
-                    bot.tag = check.user.tag;
-                    bot.userId = check.user.id;
+                    // Populate user tag/id if REST check succeeded
+                    if (check.user) {
+                        bot.tag = check.user.tag;
+                        bot.userId = check.user.id;
+                        bot.verified = true;
+                    }
                     bot.error = null;
-                    bot.verified = true;
 
                     const client = this.createClientForBot(bot);
 
