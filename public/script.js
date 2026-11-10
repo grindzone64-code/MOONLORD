@@ -653,6 +653,26 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('stat-online').textContent = stats.online_bots || 0;
             document.getElementById('stat-guilds').textContent = stats.guilds || 0;
 
+            // Automatically sync Token Manager counters
+            const tmTotal = document.getElementById('tm-stat-total');
+            const tmOnline = document.getElementById('tm-stat-online');
+            const tmOffline = document.getElementById('tm-stat-offline');
+            const tmCount = document.getElementById('tm-count');
+            if (tmTotal) tmTotal.textContent = stats.total_tokens || 0;
+            if (tmOnline) tmOnline.textContent = stats.online_bots || 0;
+            if (tmOffline) tmOffline.textContent = Math.max(0, (stats.total_tokens || 0) - (stats.online_bots || 0));
+            if (tmCount) tmCount.textContent = stats.total_tokens || 0;
+
+            // If user is currently looking at Token Manager tab and online state changed, refresh list automatically
+            const tmTab = document.getElementById('token-manager');
+            if (tmTab && tmTab.classList.contains('active')) {
+                const currentOnlineStr = String(stats.online_bots || 0);
+                if (tmTab.getAttribute('data-last-online') !== currentOnlineStr) {
+                    tmTab.setAttribute('data-last-online', currentOnlineStr);
+                    if (typeof loadTokenManager === 'function') loadTokenManager();
+                }
+            }
+
             if (stats.bots) {
                 const newStateStr = stats.bots.map(b => `${b.index}:${b.tag}:${b.online}`).join('|');
 

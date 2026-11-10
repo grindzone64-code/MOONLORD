@@ -274,6 +274,11 @@ class WebServer {
                 }
             } else {
                 tokens.forEach((token, index) => {
+                    const existing = (global.bots || []).find(b => b.token === token && b.client);
+                    if (existing) {
+                        botList.push(existing);
+                        return;
+                    }
                     const botEntry = { client: null, token, index, license: lic, error: null };
                     botList.push(botEntry);
                     try {
@@ -475,7 +480,8 @@ class WebServer {
         // Stats endpoint
         this.app.get('/api/stats', (req, res) => {
             const bots = this.getBotPool(req);
-            const onlineCount = bots.filter(b => b.client?.isReady()).length;
+            const isBotOnline = b => Boolean(b.client && (b.client.isReady?.() || b.client.readyAt || (b.client.user && b.client.ws?.status === 0)));
+            const onlineCount = bots.filter(isBotOnline).length;
             res.json({
                 status: 'success',
                 total_tokens: bots.length,
@@ -483,8 +489,8 @@ class WebServer {
                 guilds: bots.reduce((acc, b) => acc + (b.client?.guilds?.cache?.size || 0), 0),
                 bots: bots.map(b => ({
                     index: b.index,
-                    tag: b.client?.user?.tag || `Unit #${b.index}`,
-                    online: b.client?.isReady() || false
+                    tag: b.client?.user?.tag || b.tag || `Unit #${b.index}`,
+                    online: isBotOnline(b)
                 }))
             });
         });
@@ -505,10 +511,14 @@ class WebServer {
             const bots = this.getBotPool(req);
             let started = 0;
             bots.forEach(b => {
-                if (!b.client?.isReady() && b.token) {
+                const isOnline = Boolean(b.client && (b.client.isReady?.() || b.client.readyAt || (b.client.user && b.client.ws?.status === 0)));
+                if (!isOnline && b.token) {
                     started++;
+                    if (!b.client) b.client = this.createClientForBot(b);
                     b.client.login(b.token).catch(e => {
-                        console.error(`[Start All] Login error for #${b.index}:`, e.message);
+                        const msg = (e && e.message) ? e.message : (e && e.code ? `Gateway closed: ${e.code}` : String(e));
+                        console.error(`[Start All] Login error for #${b.index}:`, msg);
+                        b.error = msg;
                     });
                 }
             });
@@ -830,14 +840,15 @@ class WebServer {
             const tokens = bots.map((b, i) => {
                 const raw = b.token || '';
                 const masked = raw.length > 10 ? `${raw.slice(0, 6)}...${raw.slice(-4)}` : (raw || 'N/A');
+                const isOnline = Boolean(b.client && (b.client.isReady?.() || b.client.readyAt || (b.client.user && b.client.ws?.status === 0)));
                 return {
                     index: b.index ?? i,
                     tag: b.client?.user?.tag || b.tag || '',
                     masked,
                     userId: b.client?.user?.id || b.userId || '',
-                    online: b.client?.isReady() || false,
+                    online: isOnline,
                     error: b.error || null,
-                    status: b.client?.isReady() ? 'online' : (b.error ? 'error' : 'offline')
+                    status: isOnline ? 'online' : (b.error ? 'error' : 'offline')
                 };
             });
             res.json({ status: 'success', tokens });
